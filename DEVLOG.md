@@ -33,6 +33,11 @@
 - 走行距離合計セルの幅を上部日次表の「走行距離」列と揃え(`.distance-cell`共通クラス)、燃費ラベルセルの幅を「行先」列と揃えた(`.fuel-economy-label`)。
 - Service Worker(`sw.js`)を開発中は一時的に無効化。頻繁な変更のたびに手動Unregisterが必要で確認の妨げになっていたため、`sw.js`を「インストールされたら即座に全キャッシュ削除→自分自身を登録解除→ページ再読み込み」というキルスイッチ内容に置き換えた。`app.js`側の新規登録処理も削除。ブラウザは`sw.js`本体のバイト変更を独立して検知するため、通常のリロード1回で既存の古いService Workerも自動的に解除されることを実機で確認済み(旧キャッシュファーストSWを登録した状態から通常navigateを1回行うだけで`getRegistrations().length === 0`になることを検証)。元のキャッシュファースト設計は本DEVLOGの記述を元にPWA仕上げの段階で復元する。
 
+- 初回コミットを作成し、GitHubへ公開(genka-webappと同じ方式)。パブリックリポジトリ、`gh api repos/.../pages`でGitHub Pages(Source: GitHub Actions)を有効化し、既存の`.github/workflows/pages.yml`で`public/`が自動デプロイされることを確認済み。
+  - リポジトリ: https://github.com/shar19-ops/unten-geppo-webapp
+  - 公開URL: https://shar19-ops.github.io/unten-geppo-webapp/
+  - デプロイ後、`index.html`・`storage.js`・`assets/unten-geppo-template.xlsx`がいずれも200で配信されることを確認済み。
+
 ## 今後の改修候補(未着手・メモ)
 
 - **運転記録入力の初期設定**(2026-07-20、ユーザー依頼): 現状は運転記録入力のたびに車両(社有車選択/私有車自由入力)を都度選び直す仕様。毎回の手間を減らすため、初回に「よく使う社有車の選択」「私有車の登録」「運転管理者の記入」などを初期設定として行い、以降の入力ではその値が自動的に使われるようにしたい、という依頼。具体的な設定項目・画面構成は未確定(ヒアリングが必要)。Obsidianノート(`運転管理月報アプリ - 開発まとめ.md`)にも同内容を記録済み。
