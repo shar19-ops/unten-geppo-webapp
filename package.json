@@ -1,0 +1,13 @@
+{
+  "name": "unten-geppo-webapp",
+  "version": "1.0.0",
+  "description": "運転管理月報 Webアプリ(社有車・私有車の運転記録入力、月報表示・印刷・Excel出力)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

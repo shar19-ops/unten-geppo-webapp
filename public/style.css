@@ -1,0 +1,278 @@
+:root {
+  --bg: #f4f5f7;
+  --panel-bg: #ffffff;
+  --border: #d7dae0;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --accent: #2f6fed;
+  --accent-dark: #1e4fb8;
+  --danger: #d64545;
+  --ok: #1a8f4c;
+  --saturday: #2f6fed;
+  --header-bg: #eef2fb;
+  --row-alt: #fafbfc;
+  font-size: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Yu Gothic", "Hiragino Sans", "Meiryo", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- ヘッダー / タブナビゲーション ---
+   モバイル(iPhone)では親指で届きやすいよう画面下部固定のタブバーにし、
+   PC(運転月報の閲覧・印刷が主用途)では通常の上部タブに切り替える。 */
+.app-header {
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.25rem;
+}
+.app-header h1 { font-size: 1.15rem; margin: 0; }
+
+.tabbar { display: flex; gap: 0.5rem; }
+.tab-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.6rem 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  color: var(--muted);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent-dark); font-weight: 600; }
+
+@media (max-width: 767px) {
+  .tabbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 20;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border);
+    padding: 0.4rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom));
+    gap: 0.4rem;
+  }
+  .tab-btn { border-radius: 8px; font-size: 0.78rem; padding: 0.55rem 0.2rem; }
+  main { padding-bottom: 5.5rem; }
+}
+@media (min-width: 768px) {
+  .tabbar { padding: 0.6rem 1.25rem; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+}
+
+main { max-width: 960px; margin: 0 auto; padding: 1rem; }
+.view { display: none; }
+.view.active { display: block; }
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.panel-head h2 { margin: 0; font-size: 1.05rem; }
+.panel-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.btn {
+  appearance: none;
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.btn:hover { background: #f0f2f5; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-ghost { background: transparent; }
+.btn-text { border: none; background: none; color: var(--accent); padding: 0.25rem 0.5rem; min-height: auto; }
+.btn-danger { color: var(--danger); }
+.btn-block { display: block; width: 100%; padding: 0.9rem; font-size: 1rem; margin-top: 0.5rem; }
+
+.hint { color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 0; }
+.status { font-size: 0.85rem; color: var(--muted); margin: 0.5rem 0 0; min-height: 1.2em; }
+.status.error { color: var(--danger); }
+.status.ok { color: var(--ok); }
+
+.inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.inline-form .field { margin-bottom: 0; }
+.inline-form .field label { font-size: 0.78rem; }
+.inline-form .form-actions { grid-column: 1 / -1; display: flex; gap: 0.5rem; }
+
+.conflict-panel { border: 1px solid #e0c34a; background: #fff8e1; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.conflict-panel h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.conflict-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid #f0e2a6; font-size: 0.85rem; }
+.conflict-row:last-of-type { border-bottom: none; }
+.conflict-label { min-width: 5rem; font-weight: 600; }
+.conflict-choice { display: flex; gap: 0.4rem; align-items: center; }
+
+/* --- テーブル(社有車リスト) --- */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.data-table th, .data-table td { padding: 0.65rem 0.5rem; border-bottom: 1px solid var(--border); text-align: left; }
+.data-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+.data-table tbody tr:nth-child(even) { background: var(--row-alt); }
+.row-actions { text-align: right; white-space: nowrap; }
+.badge { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; }
+.badge-active { background: #e3f7ea; color: var(--ok); }
+.badge-inactive { background: #f3f4f6; color: var(--muted); }
+
+/* --- 運転記録入力フォーム(iPhone優先) --- */
+.entry-form { max-width: 480px; margin: 0 auto; }
+.entry-form h2 { margin-top: 0; }
+.field { margin-bottom: 1.1rem; }
+.field label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
+.input-lg {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.8rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+.input-lg:focus, .input-sm:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.input-sm { min-height: 40px; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: #fff; }
+.segmented { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.segmented-btn {
+  flex: 1; min-height: 44px; border-radius: 8px; border: 1px solid var(--border);
+  background: #fff; color: var(--muted); font-size: 0.9rem;
+}
+.segmented-btn.active { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+.toggle-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; color: var(--text); min-height: 44px; }
+.toggle-label input { width: 20px; height: 20px; }
+.fuel-field { margin-top: 0.75rem; }
+.entry-mode-panel { max-width: 480px; margin: 0 auto 1rem; padding: 0.75rem; }
+.entry-mode-panel .segmented { margin-bottom: 0; }
+
+/* --- 点検イベント(15日・月末点検)の記入パネル --- */
+.checklist-prompt-panel { max-width: 480px; margin: 0 auto 1rem; border: 1px solid var(--accent); background: #eef4ff; }
+.checklist-prompt-panel h2 { margin-top: 0; }
+.checklist-prompt-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+}
+.checklist-prompt-row:last-of-type { border-bottom: none; }
+.checklist-prompt-label { flex: 1; }
+.checklist-prompt-choice { display: flex; gap: 0.75rem; white-space: nowrap; }
+.checklist-prompt-choice label { display: flex; align-items: center; gap: 0.25rem; }
+
+/* --- 運転月報(サンプルExcelの雰囲気に寄せた表) ---
+   見出し・ラベル類はサンプルの明朝体、数値・データはゴシック体という
+   サンプルExcelのフォント使い分けをそのまま踏襲する。 */
+.report-sheet {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  padding: 1.25rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.report-header {
+  display: flex;
+  border: 1px solid #333;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+  font-family: "Yu Mincho", "MS Mincho", serif;
+}
+.report-header-cell { flex: 1; padding: 0.5rem; border-right: 1px solid #333; }
+.report-header-cell:last-child { border-right: none; }
+.report-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.05rem;
+}
+
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 0.6rem; }
+.report-table th, .report-table td { border: 1px solid #333; padding: 0.3rem 0.4rem; text-align: center; }
+.report-table thead th { background: var(--header-bg); font-weight: normal; font-family: "Yu Mincho", "MS Mincho", serif; }
+.report-table tbody tr:nth-child(even) { background: var(--row-alt); }
+.day-cell { width: 2rem; font-weight: bold; font-family: "Yu Mincho", "MS Mincho", serif; }
+.day-cell.day-sunday { color: var(--danger); }
+.day-cell.day-saturday { color: var(--saturday); }
+.day-cell.day-holiday { color: var(--danger); }
+.meter-cell { width: 7.5rem; white-space: nowrap; }
+.distance-cell { width: 4rem; }
+.dest-cell { width: auto; min-width: 13rem; }
+.fuel-economy-label { width: auto; min-width: 13rem; }
+.driver-cell { min-width: 4.5rem; }
+/* .report-table th/td の text-align:center の方がクラス単体より詳細度が高く上書きされてしまうため、
+   th/td込みで詳細度を揃えて左寄せを確実に効かせる */
+.report-table td.dest-cell { text-align: left; text-indent: 1em; }
+.num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.checklist-table { table-layout: fixed; }
+/* table-layout:fixedは1行目(colspanセルを含む行)の幅指定しか列幅計算に使わないため、
+   各列の実際の幅はcolgroupのcolで明示的に指定する(tdへのwidth指定だけでは効かない)。 */
+.checklist-table col.col-daylabel { width: 1.8rem; }
+.checklist-table col.col-num { width: 1.3rem; }
+.checklist-table col.col-item { width: auto; }
+.checklist-table col.col-result { width: 2.8rem; }
+.checklist-daylabel {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-align: center;
+  font-family: "Yu Mincho", "MS Mincho", serif;
+  font-weight: bold;
+  background: rgba(47, 111, 237, 0.12);
+  letter-spacing: 0.1em;
+}
+.checklist-header {
+  text-align: center;
+  font-family: "Yu Mincho", "MS Mincho", serif;
+  background: var(--header-bg);
+}
+.checklist-result-header {
+  font-weight: bold;
+  background: rgba(47, 111, 237, 0.2);
+}
+.checklist-num { text-align: center; }
+.checklist-item { font-size: 0.72rem; line-height: 1.35; padding: 0.35rem 0.5rem; }
+.checklist-result { text-align: center; font-weight: bold; background: rgba(47, 111, 237, 0.2); }
+.checklist-note { font-size: 0.7rem; color: var(--muted); padding: 0.4rem 0.5rem; }
+.report-table td.checklist-item,
+.report-table td.checklist-note { text-align: left; }
+.totals-table .label-cell { background: var(--header-bg); text-align: left; font-family: "Yu Mincho", "MS Mincho", serif; }
+.totals-table .num-cell { font-weight: bold; text-align: center; }
+
+/* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
+@page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .report-sheet { border: none; padding: 0; }
+  .report-table { font-size: 9.5pt; }
+  .report-header { font-size: 9.5pt; }
+  .report-page2 { break-before: page; page-break-before: always; }
+}

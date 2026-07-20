@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>運転管理月報</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6fed">
+<link rel="stylesheet" href="style.css?v=20260720j">
+</head>
+<body>
+<header class="app-header no-print">
+  <h1>運転管理月報</h1>
+</header>
+
+<nav class="tabbar no-print">
+  <button class="tab-btn" data-view="vehicles"><span class="tab-btn-label">社有車リスト</span></button>
+  <button class="tab-btn" data-view="trip-entry"><span class="tab-btn-label">運転記録入力</span></button>
+  <button class="tab-btn" data-view="report"><span class="tab-btn-label">運転月報</span></button>
+</nav>
+
+<main id="app">
+  <section id="view-vehicles" class="view"></section>
+  <section id="view-trip-entry" class="view"></section>
+  <section id="view-report" class="view"></section>
+</main>
+
+<script src="storage.js?v=20260720j"></script>
+<script src="vehicles.js?v=20260720j"></script>
+<script src="trip-entry.js?v=20260720j"></script>
+<script src="report.js?v=20260720j"></script>
+<script src="xlsx-export.js?v=20260720j"></script>
+<script src="app.js?v=20260720j"></script>
+</body>
+</html>
