@@ -218,7 +218,7 @@ async function exportMonthlyLogToFile(record, vehicleLabel, submitterName) {
 }
 
 async function exportVehiclesToFile() {
-  const filename = `社有車リスト_${todayIso()}.json`;
+  const filename = `車両リスト_${todayIso()}.json`;
   return saveBlobToFile(new Blob([JSON.stringify(loadVehicles(), null, 2)], { type: 'application/json' }), filename);
 }
 
@@ -268,24 +268,29 @@ function mergeMonthlyLog(local, imported) {
   return { merged, conflicts };
 }
 
-// マージ単位は車両番号(plateNumber)。新規車両は追加、既存車両でフィールドが異なる場合は競合として返す。
+// マージ単位は車両番号(plateNumber)+車両タイプ(vehicleType)。新規車両は追加、
+// 既存車両でフィールドが異なる場合は競合として返す。
 function mergeVehicles(localList, importedList) {
   const merged = localList.map((v) => ({ ...v }));
-  const byPlate = new Map(merged.map((v) => [v.plateNumber, v]));
+  const keyFor = (v) => `${v.vehicleType || 'company'}::${v.plateNumber}`;
+  const byKey = new Map(merged.map((v) => [keyFor(v), v]));
   const conflicts = [];
 
   importedList.forEach((iv) => {
-    const existing = byPlate.get(iv.plateNumber);
+    const key = keyFor(iv);
+    const existing = byKey.get(key);
     if (!existing) {
       const added = { ...iv, id: iv.id || generateId() };
       merged.push(added);
-      byPlate.set(iv.plateNumber, added);
+      byKey.set(key, added);
       return;
     }
     const fieldsDiffer = existing.nickname !== iv.nickname
       || existing.officeName !== iv.officeName
-      || existing.defaultManager !== iv.defaultManager
-      || existing.active !== iv.active;
+      || existing.active !== iv.active
+      || (iv.vehicleType === 'private'
+        ? existing.driverName !== iv.driverName
+        : existing.defaultManager !== iv.defaultManager);
     if (fieldsDiffer) {
       conflicts.push({ plateNumber: iv.plateNumber, local: existing, imported: iv });
     }
