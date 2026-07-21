@@ -130,6 +130,72 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => showView(btn.dataset.view));
 });
 
+// ---------------- 管理者パスワード保護(車両リスト) ----------------
+const ADMIN_PASSWORD = 'anzen_kanri';
+const ADMIN_UNLOCK_KEY = 'ug_admin_unlocked';
+
+function isAdminUnlocked() {
+  return sessionStorage.getItem(ADMIN_UNLOCK_KEY) === '1';
+}
+
+function setVehiclesTabVisible(visible) {
+  const tabBtn = document.querySelector('.tab-btn[data-view="vehicles"]');
+  tabBtn.hidden = !visible;
+  if (!visible && document.body.dataset.view === 'vehicles') {
+    showView('trip-entry');
+  }
+}
+
+function openAdminPwOverlay() {
+  document.getElementById('adminPwError').textContent = '';
+  document.getElementById('adminPwInput').value = '';
+  document.getElementById('adminPwOverlay').hidden = false;
+  document.getElementById('adminPwInput').focus();
+}
+
+function closeAdminPwOverlay() {
+  document.getElementById('adminPwOverlay').hidden = true;
+}
+
+function confirmAdminPassword() {
+  const input = document.getElementById('adminPwInput');
+  if (input.value === ADMIN_PASSWORD) {
+    sessionStorage.setItem(ADMIN_UNLOCK_KEY, '1');
+    closeAdminPwOverlay();
+    setVehiclesTabVisible(true);
+  } else {
+    document.getElementById('adminPwError').textContent = 'パスワードが違います';
+    input.value = '';
+    input.focus();
+  }
+}
+
+document.getElementById('adminModeCheck').addEventListener('change', (e) => {
+  if (e.target.checked) {
+    if (isAdminUnlocked()) {
+      setVehiclesTabVisible(true);
+      return;
+    }
+    e.target.checked = false;
+    openAdminPwOverlay();
+  } else {
+    sessionStorage.removeItem(ADMIN_UNLOCK_KEY);
+    setVehiclesTabVisible(false);
+  }
+});
+document.getElementById('adminPwConfirmBtn').addEventListener('click', confirmAdminPassword);
+document.getElementById('adminPwCancelBtn').addEventListener('click', () => {
+  closeAdminPwOverlay();
+  document.getElementById('adminModeCheck').checked = false;
+});
+document.getElementById('adminPwInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmAdminPassword(); }
+  if (e.key === 'Escape') { document.getElementById('adminPwCancelBtn').click(); }
+});
+
+setVehiclesTabVisible(isAdminUnlocked());
+document.getElementById('adminModeCheck').checked = isAdminUnlocked();
+
 // 開発中はService Workerを一時的に無効化している(更新のたびに手動Unregisterが必要になり、
 // 動作確認の妨げになるため)。既に登録されている端末があれば自動的に解除・キャッシュ削除して、
 // 通常の再読み込みだけで最新版が反映されるようにする。PWA仕上げの段階で再度有効化する。

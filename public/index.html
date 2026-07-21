@@ -11,6 +11,7 @@
 <body>
 <header class="app-header no-print">
   <h1>運転管理月報</h1>
+  <label class="admin-toggle"><input type="checkbox" id="adminModeCheck"> 管理者</label>
 </header>
 
 <nav class="tabbar no-print">
@@ -24,6 +25,18 @@
   <section id="view-trip-entry" class="view"></section>
   <section id="view-report" class="view"></section>
 </main>
+
+<div class="admin-pw-overlay no-print" id="adminPwOverlay" hidden>
+  <div class="admin-pw-dialog">
+    <h2>管理者パスワード</h2>
+    <input type="password" id="adminPwInput" class="input-lg" placeholder="パスワード" autocomplete="off">
+    <p class="status error" id="adminPwError"></p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" id="adminPwConfirmBtn">解除</button>
+      <button type="button" class="btn btn-ghost" id="adminPwCancelBtn">キャンセル</button>
+    </div>
+  </div>
+</div>
 
 <script src="storage.js?v=20260721b"></script>
 <script src="vehicles.js?v=20260721b"></script>
