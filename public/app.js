@@ -163,6 +163,7 @@ function confirmAdminPassword() {
     sessionStorage.setItem(ADMIN_UNLOCK_KEY, '1');
     closeAdminPwOverlay();
     setVehiclesTabVisible(true);
+    document.getElementById('adminModeCheck').checked = true;
   } else {
     document.getElementById('adminPwError').textContent = 'パスワードが違います';
     input.value = '';
