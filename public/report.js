@@ -9,16 +9,22 @@ let reportImportConflicts = null; // {merged, conflicts}
 
 function reportVehicleOptions() {
   const vehicles = loadVehicles().map((v) => ({
-    ref: v.id, label: `${v.plateNumber}（${v.nickname || '車種未設定'}）`, vehicleId: v.id, privateCarLabel: null
+    ref: v.id,
+    label: v.vehicleType === 'private'
+      ? `${v.plateNumber}（${v.nickname ? `${v.nickname}・私有車` : '私有車'}）`
+      : `${v.plateNumber}（${v.nickname || '車種未設定'}）`,
+    vehicleId: v.id,
+    privateCarLabel: null
   }));
+  const registeredIds = new Set(vehicles.map((v) => v.ref));
   const privateRefs = new Map();
   loadLogIndex().forEach((e) => {
-    if (e.privateCarLabel) privateRefs.set(e.vehicleRef, e.privateCarLabel);
+    if (e.privateCarLabel && !registeredIds.has(e.vehicleRef)) privateRefs.set(e.vehicleRef, e.privateCarLabel);
   });
-  const privateOptions = Array.from(privateRefs.entries()).map(([ref, label]) => ({
-    ref, label: `${label}（私有車）`, vehicleId: null, privateCarLabel: label
+  const legacyPrivateOptions = Array.from(privateRefs.entries()).map(([ref, label]) => ({
+    ref, label: `${label}（私有車・未登録）`, vehicleId: null, privateCarLabel: label
   }));
-  return [...vehicles, ...privateOptions];
+  return [...vehicles, ...legacyPrivateOptions];
 }
 
 function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
@@ -43,7 +49,7 @@ function renderReportView() {
     root.innerHTML = `
       <div class="panel">
         <h2>運転月報</h2>
-        <p class="hint">まだ車両が登録されていません。先に「社有車リスト」で登録するか、「運転記録入力」で私有車の記録を1件保存してください。</p>
+        <p class="hint">まだ車両が登録されていません。先に「車両リスト」で社有車・私有車を登録してください。</p>
       </div>
     `;
     return;
@@ -63,7 +69,7 @@ function renderReportView() {
 
   const totals = computeTotals(record.days);
   const holidays = computeJapaneseHolidays(record.year);
-  // 事業所名は社有車リストの登録内容から転記する(私有車の場合は転記元が無いため空欄)
+  // 事業所名は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
   const vehicle = selectedOption.vehicleId ? loadVehicles().find((v) => v.id === selectedOption.vehicleId) : null;
   const officeName = vehicle ? (vehicle.officeName || '') : '';
 
@@ -89,7 +95,7 @@ function renderReportView() {
         <div class="field">
           <label>事業所名</label>
           <input type="text" class="input-lg" value="${officeName}" readonly>
-          <p class="hint">※ 社有車リストの車両登録内容から転記されます。私有車には転記元がないため空欄です。</p>
+          <p class="hint">※ 車両リストの車両登録内容から転記されます。未登録の私有車には転記元がないため空欄です。</p>
         </div>
         <div class="field">
           <label>車両管理者</label>

@@ -31,6 +31,9 @@ body {
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
   padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .app-header h1 { font-size: 1.15rem; margin: 0; }
 
@@ -167,7 +170,6 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .segmented-btn.active { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
 .toggle-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; color: var(--text); min-height: 44px; }
 .toggle-label input { width: 20px; height: 20px; }
-.fuel-field { margin-top: 0.75rem; }
 .entry-mode-panel { max-width: 480px; margin: 0 auto 1rem; padding: 0.75rem; }
 .entry-mode-panel .segmented { margin-bottom: 0; }
 
@@ -263,6 +265,11 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .totals-table .label-cell { background: var(--header-bg); text-align: left; font-family: "Yu Mincho", "MS Mincho", serif; }
 .totals-table .num-cell { font-weight: bold; text-align: center; }
 
+.qr-panel { text-align: center; }
+.qr-vehicle-label { font-size: 1.1rem; font-weight: bold; margin: 0.5rem 0; }
+.qr-image { display: flex; justify-content: center; margin: 0.75rem 0; }
+.qr-url { word-break: break-all; }
+
 /* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 @media print {
@@ -276,3 +283,28 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .report-header { font-size: 9.5pt; }
   .report-page2 { break-before: page; page-break-before: always; }
 }
+
+/* --- 管理者パスワード保護(車両リスト) --- */
+.admin-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
+.admin-toggle input { width: 18px; height: 18px; }
+
+.admin-pw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.admin-pw-overlay[hidden] { display: none; }
+.admin-pw-dialog {
+  background: var(--panel-bg);
+  border-radius: 10px;
+  padding: 1.5rem;
+  max-width: 320px;
+  width: 100%;
+}
+.admin-pw-dialog h2 { margin: 0 0 1rem; font-size: 1.05rem; text-align: center; }
+.admin-pw-dialog input { text-align: center; letter-spacing: 0.15em; margin-bottom: 0.5rem; }

@@ -1,10 +1,11 @@
 // 運転記録入力画面(iPhone優先)。データはstorage.js経由(saveTripDay/saveFuelOnly/loadMonthlyLog)。
 
 let tripUsePrivateCar = false;
-let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油を後日記入
+let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油入力
 let tripStatusMessage = '';
 let tripStatusIsError = false;
 let tripPendingChecklists = []; // 保存直後に発生した点検イベントのキュー({listKey, headerNote, vehicleRef, year, month, day})
+let tripQrVehicleId = null; // QR経由で指定された車両ID(未指定/該当なしの場合はnull)
 
 function renderTripEntryView() {
   const root = document.getElementById('view-trip-entry');
@@ -14,7 +15,7 @@ function renderTripEntryView() {
     <div class="panel entry-mode-panel">
       <div class="segmented">
         <button type="button" class="segmented-btn ${tripEntryMode === 'trip' ? 'active' : ''}" data-entry-mode="trip">運転記録入力</button>
-        <button type="button" class="segmented-btn ${tripEntryMode === 'fuel' ? 'active' : ''}" data-entry-mode="fuel">給油を後日記入</button>
+        <button type="button" class="segmented-btn ${tripEntryMode === 'fuel' ? 'active' : ''}" data-entry-mode="fuel">給油入力</button>
       </div>
     </div>
     ${tripEntryMode === 'trip' ? tripFormHtml() : fuelFormHtml()}
@@ -31,16 +32,17 @@ function renderTripEntryView() {
   root.querySelectorAll('.segmented-btn[data-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
       tripUsePrivateCar = btn.dataset.mode === 'private';
+      tripQrVehicleId = null;
       renderTripEntryView();
     });
   });
 
   if (tripEntryMode === 'trip') {
-    const fuelToggle = document.getElementById('fuelToggle');
-    fuelToggle.addEventListener('change', () => {
-      document.getElementById('fuelField').hidden = !fuelToggle.checked;
-    });
     document.getElementById('tripEntryForm').addEventListener('submit', onTripEntrySubmit);
+    const vehicleSelect = document.querySelector('#tripEntryForm select[name="vehicleId"]');
+    if (vehicleSelect) {
+      vehicleSelect.addEventListener('change', () => { tripQrVehicleId = null; });
+    }
   } else {
     document.getElementById('fuelEntryForm').addEventListener('submit', onFuelEntrySubmit);
   }
@@ -54,7 +56,11 @@ function renderTripEntryView() {
   }
 }
 
-function vehicleSelectFieldHtml(vehicles) {
+function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
+  const vehicles = tripUsePrivateCar ? privateVehicles : companyVehicles;
+  const emptyHint = tripUsePrivateCar
+    ? '私有車が未登録です。「車両リスト」画面で登録してください。'
+    : '社有車が未登録です。「車両リスト」画面で登録してください。';
   return `
     <div class="field">
       <label>車両</label>
@@ -62,13 +68,11 @@ function vehicleSelectFieldHtml(vehicles) {
         <button type="button" class="segmented-btn ${!tripUsePrivateCar ? 'active' : ''}" data-mode="company">社有車</button>
         <button type="button" class="segmented-btn ${tripUsePrivateCar ? 'active' : ''}" data-mode="private">私有車</button>
       </div>
-      ${tripUsePrivateCar
-        ? `<input type="text" name="privateCarLabel" class="input-lg" placeholder="車両名・ナンバーなど自由入力">`
-        : vehicles.length
-          ? `<select name="vehicleId" class="input-lg">
-              ${vehicles.map((v) => `<option value="${v.id}">${v.plateNumber}（${v.nickname || '車種未設定'}）</option>`).join('')}
-            </select>`
-          : `<p class="hint">社有車が未登録です。「社有車リスト」画面で登録するか、私有車として入力してください。</p>`
+      ${vehicles.length
+        ? `<select name="vehicleId" class="input-lg">
+            ${vehicles.map((v) => `<option value="${v.id}" ${tripQrVehicleId === v.id ? 'selected' : ''}>${v.plateNumber}（${v.nickname || '車種未設定'}）</option>`).join('')}
+          </select>`
+        : `<p class="hint">${emptyHint}</p>`
       }
     </div>
   `;
@@ -76,14 +80,16 @@ function vehicleSelectFieldHtml(vehicles) {
 
 function tripFormHtml() {
   const today = new Date().toISOString().slice(0, 10);
-  const vehicles = loadVehicles().filter((v) => v.active !== false);
+  const allVehicles = loadVehicles().filter((v) => v.active !== false);
+  const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
+  const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
   const recentDrivers = loadRecentDrivers();
 
   return `
     <form class="entry-form panel" id="tripEntryForm">
       <h2>運転記録入力</h2>
 
-      ${vehicleSelectFieldHtml(vehicles)}
+      ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
 
       <div class="field">
         <label>日付</label>
@@ -113,17 +119,7 @@ function tripFormHtml() {
         <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0">
       </div>
 
-      <div class="field field-toggle">
-        <label class="toggle-label">
-          <input type="checkbox" id="fuelToggle"> 給油あり
-        </label>
-        <div class="field fuel-field" id="fuelField" hidden>
-          <label>給油量(L)</label>
-          <input type="text" name="fuelAdded" inputmode="decimal" class="input-lg" placeholder="例: 30.5">
-        </div>
-      </div>
-
-      <button type="submit" class="btn btn-primary btn-block" ${!tripUsePrivateCar && !vehicles.length ? 'disabled' : ''}>この記録を保存</button>
+      <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>この記録を保存</button>
       <p class="status ${tripStatusIsError ? 'error' : 'ok'}">${tripStatusMessage}</p>
     </form>
   `;
@@ -131,14 +127,16 @@ function tripFormHtml() {
 
 function fuelFormHtml() {
   const today = new Date().toISOString().slice(0, 10);
-  const vehicles = loadVehicles().filter((v) => v.active !== false);
+  const allVehicles = loadVehicles().filter((v) => v.active !== false);
+  const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
+  const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
 
   return `
     <form class="entry-form panel" id="fuelEntryForm">
-      <h2>給油を後日記入</h2>
+      <h2>給油入力</h2>
       <p class="hint">運転記録を保存し忘れた日や、給油だけを別日に記録したい場合に使います。既に保存済みのメーター指針・行先・運転者は変更されません。</p>
 
-      ${vehicleSelectFieldHtml(vehicles)}
+      ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
 
       <div class="field">
         <label>給油した日付</label>
@@ -150,7 +148,7 @@ function fuelFormHtml() {
         <input type="text" name="fuelAdded" inputmode="decimal" class="input-lg" placeholder="例: 30.5" required>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-block" ${!tripUsePrivateCar && !vehicles.length ? 'disabled' : ''}>給油を記録</button>
+      <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>給油を記録</button>
       <p class="status ${tripStatusIsError ? 'error' : 'ok'}">${tripStatusMessage}</p>
     </form>
   `;
@@ -213,15 +211,11 @@ function parseNumberOrNull(value) {
 
 function resolveVehicleSelection(fd) {
   const vehicles = loadVehicles();
-  if (tripUsePrivateCar) {
-    const privateCarLabel = String(fd.get('privateCarLabel') || '').trim();
-    if (!privateCarLabel) return { error: '私有車の車両名・ナンバーを入力してください' };
-    return { vehicleId: null, privateCarLabel, vehicleManager: '' };
-  }
   const vehicleId = fd.get('vehicleId');
-  if (!vehicleId) return { error: '車両を選択してください' };
+  if (!vehicleId) return { error: tripUsePrivateCar ? '私有車を選択してください' : '車両を選択してください' };
   const vehicle = vehicles.find((v) => v.id === vehicleId);
-  return { vehicleId, privateCarLabel: null, vehicleManager: (vehicle && vehicle.defaultManager) || '', vehicle };
+  const vehicleManager = (vehicle && vehicle.vehicleType !== 'private') ? (vehicle.defaultManager || '') : '';
+  return { vehicleId, privateCarLabel: null, vehicleManager, vehicle };
 }
 
 function onTripEntrySubmit(e) {
@@ -252,8 +246,7 @@ function onTripEntrySubmit(e) {
     meterReading: parseNumberOrNull(fd.get('meterReading')),
     destination: String(fd.get('destination') || '').trim(),
     driver,
-    alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck')),
-    fuelAdded: document.getElementById('fuelToggle').checked ? parseNumberOrNull(fd.get('fuelAdded')) : null
+    alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck'))
   };
 
   const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, vehicleManager, updatedBy: driver });
@@ -265,7 +258,7 @@ function onTripEntrySubmit(e) {
   renderTripEntryView();
 }
 
-// ---------------- 給油の後日記入 ----------------
+// ---------------- 給油入力 ----------------
 function onFuelEntrySubmit(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
