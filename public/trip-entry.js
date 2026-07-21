@@ -1,7 +1,7 @@
 // 運転記録入力画面(iPhone優先)。データはstorage.js経由(saveTripDay/saveFuelOnly/loadMonthlyLog)。
 
 let tripUsePrivateCar = false;
-let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油を後日記入
+let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油入力
 let tripStatusMessage = '';
 let tripStatusIsError = false;
 let tripPendingChecklists = []; // 保存直後に発生した点検イベントのキュー({listKey, headerNote, vehicleRef, year, month, day})
@@ -15,7 +15,7 @@ function renderTripEntryView() {
     <div class="panel entry-mode-panel">
       <div class="segmented">
         <button type="button" class="segmented-btn ${tripEntryMode === 'trip' ? 'active' : ''}" data-entry-mode="trip">運転記録入力</button>
-        <button type="button" class="segmented-btn ${tripEntryMode === 'fuel' ? 'active' : ''}" data-entry-mode="fuel">給油を後日記入</button>
+        <button type="button" class="segmented-btn ${tripEntryMode === 'fuel' ? 'active' : ''}" data-entry-mode="fuel">給油入力</button>
       </div>
     </div>
     ${tripEntryMode === 'trip' ? tripFormHtml() : fuelFormHtml()}
@@ -38,10 +38,6 @@ function renderTripEntryView() {
   });
 
   if (tripEntryMode === 'trip') {
-    const fuelToggle = document.getElementById('fuelToggle');
-    fuelToggle.addEventListener('change', () => {
-      document.getElementById('fuelField').hidden = !fuelToggle.checked;
-    });
     document.getElementById('tripEntryForm').addEventListener('submit', onTripEntrySubmit);
     const vehicleSelect = document.querySelector('#tripEntryForm select[name="vehicleId"]');
     if (vehicleSelect) {
@@ -123,16 +119,6 @@ function tripFormHtml() {
         <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0">
       </div>
 
-      <div class="field field-toggle">
-        <label class="toggle-label">
-          <input type="checkbox" id="fuelToggle"> 給油あり
-        </label>
-        <div class="field fuel-field" id="fuelField" hidden>
-          <label>給油量(L)</label>
-          <input type="text" name="fuelAdded" inputmode="decimal" class="input-lg" placeholder="例: 30.5">
-        </div>
-      </div>
-
       <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>この記録を保存</button>
       <p class="status ${tripStatusIsError ? 'error' : 'ok'}">${tripStatusMessage}</p>
     </form>
@@ -147,7 +133,7 @@ function fuelFormHtml() {
 
   return `
     <form class="entry-form panel" id="fuelEntryForm">
-      <h2>給油を後日記入</h2>
+      <h2>給油入力</h2>
       <p class="hint">運転記録を保存し忘れた日や、給油だけを別日に記録したい場合に使います。既に保存済みのメーター指針・行先・運転者は変更されません。</p>
 
       ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
@@ -260,8 +246,7 @@ function onTripEntrySubmit(e) {
     meterReading: parseNumberOrNull(fd.get('meterReading')),
     destination: String(fd.get('destination') || '').trim(),
     driver,
-    alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck')),
-    fuelAdded: document.getElementById('fuelToggle').checked ? parseNumberOrNull(fd.get('fuelAdded')) : null
+    alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck'))
   };
 
   const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, vehicleManager, updatedBy: driver });
@@ -273,7 +258,7 @@ function onTripEntrySubmit(e) {
   renderTripEntryView();
 }
 
-// ---------------- 給油の後日記入 ----------------
+// ---------------- 給油入力 ----------------
 function onFuelEntrySubmit(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
