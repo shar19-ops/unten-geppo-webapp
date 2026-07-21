@@ -263,6 +263,11 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .totals-table .label-cell { background: var(--header-bg); text-align: left; font-family: "Yu Mincho", "MS Mincho", serif; }
 .totals-table .num-cell { font-weight: bold; text-align: center; }
 
+.qr-panel { text-align: center; }
+.qr-vehicle-label { font-size: 1.1rem; font-weight: bold; margin: 0.5rem 0; }
+.qr-image { display: flex; justify-content: center; margin: 0.75rem 0; }
+.qr-url { word-break: break-all; }
+
 /* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 @media print {

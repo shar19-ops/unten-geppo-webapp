@@ -4,6 +4,7 @@ let vehicleFormState = null; // null=非表示, {}=新規, {id,...}=編集中
 let vehicleImportConflicts = null; // インポート後、競合があれば{merged, conflicts}を保持
 let vehicleStatusMessage = '';
 let vehicleStatusIsError = false;
+let vehicleQrState = null; // null=非表示 / {vehicle, url, svg}=QRコード表示中
 
 function renderVehiclesView() {
   const root = document.getElementById('view-vehicles');
@@ -11,7 +12,7 @@ function renderVehiclesView() {
 
   root.innerHTML = `
     <div class="panel">
-      <div class="panel-head">
+      <div class="panel-head ${vehicleQrState ? 'no-print' : ''}">
         <h2>社有車リスト</h2>
         <div class="panel-actions">
           <input type="file" id="vehicleExcelInput" accept=".xlsx,.xls" hidden>
@@ -25,9 +26,10 @@ function renderVehiclesView() {
       </div>
 
       ${vehicleFormState ? vehicleFormHtml(vehicleFormState) : ''}
+      ${vehicleQrState ? qrPanelHtml(vehicleQrState) : ''}
       ${vehicleImportConflicts ? conflictPanelHtml(vehicleImportConflicts.conflicts) : ''}
 
-      <table class="data-table">
+      <table class="data-table ${vehicleQrState ? 'no-print' : ''}">
         <thead>
           <tr>
             <th>車両番号</th>
@@ -42,8 +44,8 @@ function renderVehiclesView() {
           ${vehicles.length ? vehicles.map(vehicleRow).join('') : '<tr><td colspan="6" class="hint">まだ社有車が登録されていません。「＋ 車両を追加」またはExcel取込で登録してください。</td></tr>'}
         </tbody>
       </table>
-      <p class="hint">※ 私有車は運転記録入力画面でその都度自由入力します(このリストには登録されません)。</p>
-      <p class="status ${vehicleStatusIsError ? 'error' : 'ok'}">${vehicleStatusMessage}</p>
+      <p class="hint ${vehicleQrState ? 'no-print' : ''}">※ 私有車は運転記録入力画面でその都度自由入力します(このリストには登録されません)。</p>
+      <p class="status ${vehicleStatusIsError ? 'error' : 'ok'} ${vehicleQrState ? 'no-print' : ''}">${vehicleStatusMessage}</p>
     </div>
   `;
 
@@ -67,6 +69,18 @@ function renderVehiclesView() {
   document.getElementById('vehicleExcelInput').addEventListener('change', onVehicleExcelSelected);
   document.getElementById('vehicleJsonInput').addEventListener('change', onVehicleJsonSelected);
 
+  root.querySelectorAll('.vehicle-qr-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const vehicle = vehicles.find((x) => x.id === btn.dataset.id);
+      await loadScriptOnce('vendor/qrcode/qrcode.js');
+      const url = `${location.origin}${location.pathname}?vehicle=${encodeURIComponent(vehicle.id)}`;
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      vehicleQrState = { vehicle, url, svg: qr.createSvgTag(6, 8) };
+      renderVehiclesView();
+    });
+  });
   root.querySelectorAll('.vehicle-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const v = vehicles.find((x) => x.id === btn.dataset.id);
@@ -90,6 +104,14 @@ function renderVehiclesView() {
     form.addEventListener('submit', onVehicleFormSubmit);
     document.getElementById('vehicleFormCancelBtn').addEventListener('click', () => {
       vehicleFormState = null;
+      renderVehiclesView();
+    });
+  }
+
+  if (vehicleQrState) {
+    document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
+    document.getElementById('qrCloseBtn').addEventListener('click', () => {
+      vehicleQrState = null;
       renderVehiclesView();
     });
   }
@@ -118,10 +140,31 @@ function vehicleRow(v) {
       <td>${v.defaultManager || ''}</td>
       <td><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? '使用中' : '停止中'}</span></td>
       <td class="row-actions">
+        <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${v.id}">QRコード</button>
         <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${v.id}">編集</button>
         <button class="btn btn-text btn-danger vehicle-delete-btn" type="button" data-id="${v.id}">削除</button>
       </td>
     </tr>
+  `;
+}
+
+function qrPanelHtml(state) {
+  const { vehicle, url, svg } = state;
+  return `
+    <div class="panel qr-panel" id="vehicleQrPanel">
+      <div class="panel-head no-print">
+        <h2>QRコード: ${vehicle.plateNumber}</h2>
+        <div class="panel-actions">
+          <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
+          <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
+        </div>
+      </div>
+      <div class="qr-print-area">
+        <p class="qr-vehicle-label">${vehicle.plateNumber}${vehicle.nickname ? `(${vehicle.nickname})` : ''}</p>
+        <div class="qr-image">${svg}</div>
+        <p class="qr-url hint no-print">${url}</p>
+      </div>
+    </div>
   `;
 }
 
