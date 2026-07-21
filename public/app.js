@@ -142,17 +142,18 @@ if (window.caches) {
   caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
-// QRコードからの起動処理(社有車の?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
+// QRコードからの起動処理(社有車・私有車問わず?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
 (function applyQrVehicleParam() {
   const params = new URLSearchParams(location.search);
   const qrVehicleId = params.get('vehicle');
   if (qrVehicleId) {
     const vehicles = loadVehicles().filter((v) => v.active !== false);
     const matched = vehicles.find((v) => v.id === qrVehicleId);
-    tripUsePrivateCar = false;
     if (matched) {
+      tripUsePrivateCar = matched.vehicleType === 'private';
       tripQrVehicleId = qrVehicleId;
     } else {
+      tripUsePrivateCar = false;
       tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
       tripStatusIsError = true;
     }
