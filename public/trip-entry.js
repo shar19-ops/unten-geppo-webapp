@@ -27,6 +27,7 @@ function renderTripEntryView() {
     btn.addEventListener('click', () => {
       tripEntryMode = btn.dataset.entryMode;
       tripStatusMessage = '';
+      tripSelectedVehicleId = null;
       renderTripEntryView();
     });
   });
@@ -140,7 +141,7 @@ function tripFormHtml() {
 
       <div class="field">
         <label>出庫時メーター指針(km)</label>
-        <input type="text" name="meterReading" inputmode="decimal" class="input-lg" placeholder="例: 15230" value="${existingDay && existingDay.meterReading != null ? existingDay.meterReading : ''}">
+        <input type="text" name="meterReading" inputmode="decimal" class="input-lg" placeholder="例: 15230" value="${existingDay && existingDay.meterReading != null ? escapeHtml(existingDay.meterReading) : ''}">
       </div>
 
       <div class="field">
@@ -158,7 +159,7 @@ function tripFormHtml() {
 
       <div class="field">
         <label>アルコールチェック(mg/L)</label>
-        <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheck != null ? existingDay.alcoholCheck : ''}">
+        <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheck != null ? escapeHtml(existingDay.alcoholCheck) : ''}">
       </div>
 
       <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>この記録を保存</button>
