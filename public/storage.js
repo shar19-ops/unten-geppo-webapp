@@ -1,6 +1,6 @@
 // データアクセス層。vehicles.js/trip-entry.js/report.jsはこのファイルの関数経由でのみ
-// データに触れる。将来クラウドDB(Firebase/Microsoft Graph API等)へ移行する際は、
-// この中身を差し替えるだけでUI側は無改修で済む想定。
+// データに触れる。車両マスタはFirebase Realtime Databaseと同期し(syncVehiclesFromCloud等)、
+// 運転記録(月報・給油記録)は引き続きlocalStorageのみで完結する。
 
 const VEHICLES_KEY = 'ug_vehicles';
 const LOG_PREFIX = 'ug_log_';
@@ -70,6 +70,75 @@ function deleteVehicle(vehicleId) {
   const list = loadVehicles().filter((v) => v.id !== vehicleId);
   saveVehicles(list);
   return list;
+}
+
+// ---------------- 車両マスタのクラウド同期(Firebase Realtime Database) ----------------
+// Firebase SDKは使わず、素のfetch()のみで読み書きする(ビルド不要という既存方針に合わせる)。
+// ルールは{".read":true,".write":true}(全開放)の前提。DB URLの末尾にスラッシュは付けない。
+const FIREBASE_DB_URL = 'https://unten-geppo-webapp-default-rtdb.firebaseio.com';
+
+async function syncVehiclesFromCloud() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/vehicles.json`);
+    if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
+    const data = await res.json();
+    const list = data ? Object.values(data) : [];
+    saveVehicles(list);
+    return list;
+  } catch {
+    return loadVehicles();
+  }
+}
+
+async function pushVehicleToCloud(vehicle) {
+  const list = loadVehicles();
+  const now = new Date().toISOString();
+  const idx = list.findIndex((v) => v.id === vehicle.id);
+  const finalVehicle = idx >= 0
+    ? { ...list[idx], ...vehicle, updatedAt: now }
+    : { ...vehicle, id: vehicle.id || generateId(), createdAt: now, updatedAt: now };
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/vehicles/${finalVehicle.id}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(finalVehicle)
+    });
+    if (!res.ok) throw new Error('Firebase write failed: ' + res.status);
+  } catch {
+    return { ok: false };
+  }
+  const newList = idx >= 0 ? list.map((v, i) => (i === idx ? finalVehicle : v)) : [...list, finalVehicle];
+  saveVehicles(newList);
+  return { ok: true, vehicle: finalVehicle };
+}
+
+async function deleteVehicleFromCloud(vehicleId) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/vehicles/${vehicleId}.json`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Firebase delete failed: ' + res.status);
+  } catch {
+    return { ok: false };
+  }
+  const list = loadVehicles().filter((v) => v.id !== vehicleId);
+  saveVehicles(list);
+  return { ok: true };
+}
+
+async function pushVehiclesToCloud(list) {
+  const map = {};
+  list.forEach((v) => { map[v.id] = v; });
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/vehicles.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(map)
+    });
+    if (!res.ok) throw new Error('Firebase bulk write failed: ' + res.status);
+  } catch {
+    return { ok: false };
+  }
+  saveVehicles(list);
+  return { ok: true };
 }
 
 // ---------------- 月報レコード ----------------
