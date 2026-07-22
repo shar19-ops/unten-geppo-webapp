@@ -57,6 +57,18 @@ function renderTripEntryView() {
 }
 
 function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
+  if (tripQrVehicleId) {
+    const lockedVehicle = [...companyVehicles, ...privateVehicles].find((v) => v.id === tripQrVehicleId);
+    if (lockedVehicle) {
+      return `
+        <div class="field">
+          <label>車両</label>
+          <p class="input-lg">${escapeHtml(lockedVehicle.plateNumber)}（${escapeHtml(lockedVehicle.nickname || '車種未設定')}）</p>
+          <input type="hidden" name="vehicleId" value="${escapeHtml(lockedVehicle.id)}">
+        </div>
+      `;
+    }
+  }
   const vehicles = tripUsePrivateCar ? privateVehicles : companyVehicles;
   const emptyHint = tripUsePrivateCar
     ? '私有車が未登録です。「車両リスト」画面で登録してください。'
