@@ -1,4 +1,4 @@
-// 車両リスト管理画面(社有車・私有車)。データはすべてstorage.js経由(loadVehicles/saveVehicle/deleteVehicle/mergeVehicles)。
+// 車両リスト管理画面(社有車・私有車)。データはすべてstorage.js経由(loadVehicles/pushVehicleToCloud/deleteVehicleFromCloud/pushVehiclesToCloud/mergeVehicles)。車両マスタはFirebaseと同期される。
 
 const VEHICLE_TYPE_LABELS = { company: '社有車', private: '私有車' };
 
@@ -108,11 +108,16 @@ function renderVehiclesView() {
     });
   });
   root.querySelectorAll('.vehicle-delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const v = allVehicles.find((x) => x.id === btn.dataset.id);
       if (confirm(`「${v.plateNumber}」を削除します。よろしいですか?`)) {
-        deleteVehicle(v.id);
-        setVehicleStatus(`削除しました(${v.plateNumber})`, false);
+        const result = await deleteVehicleFromCloud(v.id);
+        if (!result.ok) {
+          setVehicleStatus('削除できませんでした(通信エラー)', true);
+          renderVehiclesView();
+          return;
+        }
+        setVehicleStatus(`削除しました(${escapeHtml(v.plateNumber)})`, false);
         renderVehiclesView();
       }
     });
@@ -153,17 +158,18 @@ function setVehicleStatus(message, isError) {
 function vehicleRow(v) {
   const isPrivate = (v.vehicleType || 'company') === 'private';
   const lastCol = isPrivate ? (v.driverName || '') : (v.defaultManager || '');
+  const id = escapeHtml(v.id);
   return `
     <tr>
-      <td>${v.plateNumber}</td>
-      <td>${v.nickname || ''}</td>
-      <td>${v.officeName || ''}</td>
-      <td>${lastCol}</td>
+      <td>${escapeHtml(v.plateNumber)}</td>
+      <td>${escapeHtml(v.nickname || '')}</td>
+      <td>${escapeHtml(v.officeName || '')}</td>
+      <td>${escapeHtml(lastCol)}</td>
       <td><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? '使用中' : '停止中'}</span></td>
       <td class="row-actions">
-        <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${v.id}">QRコード</button>
-        <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${v.id}">編集</button>
-        <button class="btn btn-text btn-danger vehicle-delete-btn" type="button" data-id="${v.id}">削除</button>
+        <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${id}">QRコード</button>
+        <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${id}">編集</button>
+        <button class="btn btn-text btn-danger vehicle-delete-btn" type="button" data-id="${id}">削除</button>
       </td>
     </tr>
   `;
@@ -174,14 +180,14 @@ function qrPanelHtml(state) {
   return `
     <div class="panel qr-panel" id="vehicleQrPanel">
       <div class="panel-head no-print">
-        <h2>QRコード: ${vehicle.plateNumber}</h2>
+        <h2>QRコード: ${escapeHtml(vehicle.plateNumber)}</h2>
         <div class="panel-actions">
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
         </div>
       </div>
       <div class="qr-print-area">
-        <p class="qr-vehicle-label">${vehicle.plateNumber}${vehicle.nickname ? `(${vehicle.nickname})` : ''}</p>
+        <p class="qr-vehicle-label">${escapeHtml(vehicle.plateNumber)}${vehicle.nickname ? `(${escapeHtml(vehicle.nickname)})` : ''}</p>
         <div class="qr-image">${svg}</div>
         <p class="qr-url hint no-print">${url}</p>
       </div>
@@ -195,11 +201,11 @@ function vehicleFormHtml(v) {
     <form class="inline-form" id="vehicleForm">
       <div class="field">
         <label>車両番号(必須)</label>
-        <input type="text" class="input-lg" name="plateNumber" value="${v.plateNumber || ''}" required>
+        <input type="text" class="input-lg" name="plateNumber" value="${escapeHtml(v.plateNumber || '')}" required>
       </div>
       <div class="field">
         <label>車種／名称</label>
-        <input type="text" class="input-lg" name="nickname" value="${v.nickname || ''}">
+        <input type="text" class="input-lg" name="nickname" value="${escapeHtml(v.nickname || '')}">
       </div>
       <div class="field">
         <label>事業所名</label>
@@ -211,11 +217,11 @@ function vehicleFormHtml(v) {
       ${isPrivate
         ? `<div class="field">
             <label>使用者名(必須)</label>
-            <input type="text" class="input-lg" name="driverName" value="${v.driverName || ''}" required>
+            <input type="text" class="input-lg" name="driverName" value="${escapeHtml(v.driverName || '')}" required>
           </div>`
         : `<div class="field">
             <label>既定の車両管理者</label>
-            <input type="text" class="input-lg" name="defaultManager" value="${v.defaultManager || ''}">
+            <input type="text" class="input-lg" name="defaultManager" value="${escapeHtml(v.defaultManager || '')}">
           </div>`
       }
       <div class="field">
@@ -229,7 +235,7 @@ function vehicleFormHtml(v) {
   `;
 }
 
-function onVehicleFormSubmit(e) {
+async function onVehicleFormSubmit(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
   const plateNumber = String(fd.get('plateNumber') || '').trim();
@@ -261,7 +267,13 @@ function onVehicleFormSubmit(e) {
   } else {
     vehicle.defaultManager = String(fd.get('defaultManager') || '').trim();
   }
-  saveVehicle(vehicle);
+  const result = await pushVehicleToCloud(vehicle);
+  if (!result.ok) {
+    vehicleFormState = vehicle;
+    setVehicleStatus('保存できませんでした(通信エラー)', true);
+    renderVehiclesView();
+    return;
+  }
   setVehicleStatus(`保存しました(${plateNumber})`, false);
   vehicleFormState = null;
   renderVehiclesView();
@@ -353,20 +365,25 @@ async function onVehicleJsonSelected(e) {
   try {
     const data = await readJsonFile(file);
     if (!Array.isArray(data)) throw new Error('車両リストのJSONファイルではないようです');
-    applyVehicleImport(data, `JSONから${data.length}件読み込みました`);
+    await applyVehicleImport(data, `JSONから${data.length}件読み込みました`);
   } catch (err) {
     setVehicleStatus('JSONファイルを読み込めませんでした: ' + err.message, true);
     renderVehiclesView();
   }
 }
 
-function applyVehicleImport(importedList, successMessage) {
+async function applyVehicleImport(importedList, successMessage) {
   const { merged, conflicts } = mergeVehicles(loadVehicles(), importedList);
   if (conflicts.length) {
     vehicleImportConflicts = { merged, conflicts };
     setVehicleStatus(`${conflicts.length}件の車両で内容の食い違いがあります。下で選んで適用してください。`, true);
   } else {
-    saveVehicles(merged);
+    const result = await pushVehiclesToCloud(merged);
+    if (!result.ok) {
+      setVehicleStatus('保存できませんでした(通信エラー)', true);
+      renderVehiclesView();
+      return;
+    }
     setVehicleStatus(successMessage, false);
   }
   renderVehiclesView();
@@ -382,9 +399,9 @@ function conflictPanelHtml(conflicts) {
         const importedExtra = isPrivate ? (c.imported.driverName || '(空)') : (c.imported.defaultManager || '(空)');
         return `
         <div class="conflict-row">
-          <span class="conflict-label">${c.plateNumber}</span>
-          <span>この端末: ${c.local.nickname || '(空)'} / ${c.local.officeName || '(空)'} / ${localExtra}</span>
-          <span>取込データ: ${c.imported.nickname || '(空)'} / ${c.imported.officeName || '(空)'} / ${importedExtra}</span>
+          <span class="conflict-label">${escapeHtml(c.plateNumber)}</span>
+          <span>この端末: ${escapeHtml(c.local.nickname || '(空)')} / ${escapeHtml(c.local.officeName || '(空)')} / ${escapeHtml(localExtra)}</span>
+          <span>取込データ: ${escapeHtml(c.imported.nickname || '(空)')} / ${escapeHtml(c.imported.officeName || '(空)')} / ${escapeHtml(importedExtra)}</span>
           <span class="conflict-choice">
             <label><input type="radio" name="conflict-${i}" value="local" checked> この端末を残す</label>
             <label><input type="radio" name="conflict-${i}" value="imported"> 取込データで更新</label>
@@ -400,7 +417,7 @@ function conflictPanelHtml(conflicts) {
   `;
 }
 
-function applyVehicleConflictResolution() {
+async function applyVehicleConflictResolution() {
   const { merged, conflicts } = vehicleImportConflicts;
   conflicts.forEach((c, i) => {
     const choice = document.querySelector(`input[name="conflict-${i}"]:checked`).value;
@@ -418,7 +435,12 @@ function applyVehicleConflictResolution() {
       }
     }
   });
-  saveVehicles(merged);
+  const result = await pushVehiclesToCloud(merged);
+  if (!result.ok) {
+    setVehicleStatus('保存できませんでした(通信エラー)', true);
+    renderVehiclesView();
+    return;
+  }
   vehicleImportConflicts = null;
   setVehicleStatus('取込内容を適用しました', false);
   renderVehiclesView();
