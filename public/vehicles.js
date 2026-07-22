@@ -268,6 +268,7 @@ async function onVehicleFormSubmit(e) {
   }
   const result = await pushVehicleToCloud(vehicle);
   if (!result.ok) {
+    vehicleFormState = vehicle;
     setVehicleStatus('保存できませんでした(通信エラー)', true);
     renderVehiclesView();
     return;
@@ -436,7 +437,6 @@ async function applyVehicleConflictResolution() {
   const result = await pushVehiclesToCloud(merged);
   if (!result.ok) {
     setVehicleStatus('保存できませんでした(通信エラー)', true);
-    vehicleImportConflicts = null;
     renderVehiclesView();
     return;
   }
