@@ -206,6 +206,7 @@ function onChecklistPromptSubmit(e) {
   if (record) {
     results.forEach((r, i) => { record[pending.listKey][i].result = r; });
     saveMonthlyLog(record);
+    syncLogMetaToCloud(record.key, buildMetaPayload(record));
   }
   tripPendingChecklists = tripPendingChecklists.slice(1);
   tripStatusMessage = '点検結果を保存しました';
@@ -261,6 +262,7 @@ function onTripEntrySubmit(e) {
   };
 
   const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, updatedBy: driver });
+  syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
   if (driver) pushRecentDriver(driver);
 
   tripPendingChecklists = checklistEventsDue(savedRecord, day).map((d) => ({ ...d, vehicleRef, year, month, day }));
@@ -294,7 +296,8 @@ function onFuelEntrySubmit(e) {
   }
 
   const vehicleRef = vehicleRefFor(vehicleId, privateCarLabel);
-  saveFuelOnly(vehicleRef, year, month, day, fuelAdded, { vehicleId, privateCarLabel });
+  const savedRecord = saveFuelOnly(vehicleRef, year, month, day, fuelAdded, { vehicleId, privateCarLabel });
+  syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
 
   tripStatusMessage = `給油量を記録しました(${year}年${month}月${day}日・${fuelAdded}L)`;
   tripStatusIsError = false;
