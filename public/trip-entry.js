@@ -6,6 +6,8 @@ let tripStatusMessage = '';
 let tripStatusIsError = false;
 let tripPendingChecklists = []; // 保存直後に発生した点検イベントのキュー({listKey, headerNote, vehicleRef, year, month, day})
 let tripQrVehicleId = null; // QR経由で指定された車両ID(未指定/該当なしの場合はnull)
+let tripSelectedDate = todayIso(); // 運転記録入力欄で現在選択中の日付
+let tripSelectedVehicleId = null; // 運転記録入力欄で現在選択中の車両ID(未選択ならQRロック車両または一覧の先頭車両に従う)
 
 function renderTripEntryView() {
   const root = document.getElementById('view-trip-entry');
@@ -25,6 +27,7 @@ function renderTripEntryView() {
     btn.addEventListener('click', () => {
       tripEntryMode = btn.dataset.entryMode;
       tripStatusMessage = '';
+      tripSelectedVehicleId = null;
       renderTripEntryView();
     });
   });
@@ -33,6 +36,7 @@ function renderTripEntryView() {
     btn.addEventListener('click', () => {
       tripUsePrivateCar = btn.dataset.mode === 'private';
       tripQrVehicleId = null;
+      tripSelectedVehicleId = null;
       renderTripEntryView();
     });
   });
@@ -41,7 +45,18 @@ function renderTripEntryView() {
     document.getElementById('tripEntryForm').addEventListener('submit', onTripEntrySubmit);
     const vehicleSelect = document.querySelector('#tripEntryForm select[name="vehicleId"]');
     if (vehicleSelect) {
-      vehicleSelect.addEventListener('change', () => { tripQrVehicleId = null; });
+      vehicleSelect.addEventListener('change', (e) => {
+        tripQrVehicleId = null;
+        tripSelectedVehicleId = e.target.value;
+        renderTripEntryView();
+      });
+    }
+    const dateInput = document.querySelector('#tripEntryForm input[name="date"]');
+    if (dateInput) {
+      dateInput.addEventListener('change', (e) => {
+        tripSelectedDate = e.target.value;
+        renderTripEntryView();
+      });
     }
   } else {
     document.getElementById('fuelEntryForm').addEventListener('submit', onFuelEntrySubmit);
@@ -54,6 +69,17 @@ function renderTripEntryView() {
       renderTripEntryView();
     });
   }
+}
+
+// 選択中の車両・日付の組み合わせに既に運転記録があれば、その内容を返す(無ければnull)。
+// 運転記録入力欄への自動反映・修正機能のために使う。
+function findExistingDayData(vehicleId, dateStr) {
+  if (!vehicleId || !dateStr) return null;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const vehicleRef = vehicleRefFor(vehicleId, null);
+  const record = loadMonthlyLog(vehicleRef, year, month);
+  const dayData = record && record.days && record.days[day];
+  return dayHasData(dayData) ? dayData : null;
 }
 
 function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
@@ -82,7 +108,7 @@ function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
       </div>
       ${vehicles.length
         ? `<select name="vehicleId" class="input-lg">
-            ${vehicles.map((v) => `<option value="${escapeHtml(v.id)}" ${tripQrVehicleId === v.id ? 'selected' : ''}>${escapeHtml(v.plateNumber)}（${escapeHtml(v.nickname || '車種未設定')}）</option>`).join('')}
+            ${vehicles.map((v) => `<option value="${escapeHtml(v.id)}" ${(tripSelectedVehicleId || tripQrVehicleId) === v.id ? 'selected' : ''}>${escapeHtml(v.plateNumber)}（${escapeHtml(v.nickname || '車種未設定')}）</option>`).join('')}
           </select>`
         : `<p class="hint">${emptyHint}</p>`
       }
@@ -91,36 +117,41 @@ function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
 }
 
 function tripFormHtml() {
-  const today = new Date().toISOString().slice(0, 10);
   const allVehicles = loadVehicles().filter((v) => v.active !== false);
   const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
   const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
   const recentDrivers = loadRecentDrivers();
 
+  const defaultVehicle = tripUsePrivateCar ? privateVehicles[0] : companyVehicles[0];
+  const effectiveVehicleId = tripSelectedVehicleId || tripQrVehicleId || (defaultVehicle ? defaultVehicle.id : null);
+  const existingDay = findExistingDayData(effectiveVehicleId, tripSelectedDate);
+
   return `
     <form class="entry-form panel" id="tripEntryForm">
       <h2>運転記録入力</h2>
+
+      ${existingDay ? '<p class="hint">この日は既に入力済みです。内容を修正して保存できます</p>' : ''}
 
       ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
 
       <div class="field">
         <label>日付</label>
-        <input type="date" name="date" class="input-lg" value="${today}" required>
+        <input type="date" name="date" class="input-lg" value="${tripSelectedDate}" required>
       </div>
 
       <div class="field">
         <label>出庫時メーター指針(km)</label>
-        <input type="text" name="meterReading" inputmode="decimal" class="input-lg" placeholder="例: 15230">
+        <input type="text" name="meterReading" inputmode="decimal" class="input-lg" placeholder="例: 15230" value="${existingDay && existingDay.meterReading != null ? escapeHtml(existingDay.meterReading) : ''}">
       </div>
 
       <div class="field">
         <label>行先</label>
-        <input type="text" name="destination" class="input-lg" placeholder="例: 本社 → A社">
+        <input type="text" name="destination" class="input-lg" placeholder="例: 本社 → A社" value="${escapeHtml(existingDay ? existingDay.destination || '' : '')}">
       </div>
 
       <div class="field">
         <label>運転者</label>
-        <input type="text" name="driver" class="input-lg" list="recentDrivers" placeholder="運転者名">
+        <input type="text" name="driver" class="input-lg" list="recentDrivers" placeholder="運転者名" value="${escapeHtml(existingDay ? existingDay.driver || '' : '')}">
         <datalist id="recentDrivers">
           ${recentDrivers.map((d) => `<option value="${d}">`).join('')}
         </datalist>
@@ -128,7 +159,7 @@ function tripFormHtml() {
 
       <div class="field">
         <label>アルコールチェック(mg/L)</label>
-        <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0">
+        <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheck != null ? escapeHtml(existingDay.alcoholCheck) : ''}">
       </div>
 
       <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>この記録を保存</button>
@@ -248,11 +279,6 @@ function onTripEntrySubmit(e) {
   const { vehicleId, privateCarLabel } = sel;
 
   const vehicleRef = vehicleRefFor(vehicleId, privateCarLabel);
-  const existing = loadMonthlyLog(vehicleRef, year, month);
-  if (existing && dayHasData(existing.days && existing.days[day])) {
-    const label = vehicleId ? (loadVehicles().find((v) => v.id === vehicleId) || {}).plateNumber : privateCarLabel;
-    if (!confirm(`${year}年${month}月${day}日は${label}で既に入力済みです。上書きしますか?`)) return;
-  }
 
   const driver = String(fd.get('driver') || '').trim();
   const dayData = {
@@ -269,6 +295,8 @@ function onTripEntrySubmit(e) {
   tripPendingChecklists = checklistEventsDue(savedRecord, day).map((d) => ({ ...d, vehicleRef, year, month, day }));
   tripStatusMessage = `保存しました(${year}年${month}月${day}日)`;
   tripStatusIsError = false;
+  tripSelectedDate = todayIso();
+  tripSelectedVehicleId = null;
   renderTripEntryView();
 }
 
