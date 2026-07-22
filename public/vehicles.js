@@ -45,7 +45,7 @@ function renderVehiclesView() {
             <th>車両番号</th>
             <th>車種／名称</th>
             <th>事業所名</th>
-            <th>${vehicleActiveTab === 'private' ? '使用者名' : '既定の車両管理者'}</th>
+            <th>車両管理者</th>
             <th>状態</th>
             <th></th>
           </tr>
@@ -156,15 +156,13 @@ function setVehicleStatus(message, isError) {
 }
 
 function vehicleRow(v) {
-  const isPrivate = (v.vehicleType || 'company') === 'private';
-  const lastCol = isPrivate ? (v.driverName || '') : (v.defaultManager || '');
   const id = escapeHtml(v.id);
   return `
     <tr>
       <td>${escapeHtml(v.plateNumber)}</td>
       <td>${escapeHtml(v.nickname || '')}</td>
       <td>${escapeHtml(v.officeName || '')}</td>
-      <td>${escapeHtml(lastCol)}</td>
+      <td>${escapeHtml(vehicleManagerOf(v))}</td>
       <td><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? '使用中' : '停止中'}</span></td>
       <td class="row-actions">
         <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${id}">QRコード</button>
@@ -214,16 +212,10 @@ function vehicleFormHtml(v) {
           ${OFFICE_NAMES.map((name) => `<option value="${name}" ${v.officeName === name ? 'selected' : ''}>${name}</option>`).join('')}
         </select>
       </div>
-      ${isPrivate
-        ? `<div class="field">
-            <label>使用者名(必須)</label>
-            <input type="text" class="input-lg" name="driverName" value="${escapeHtml(v.driverName || '')}" required>
-          </div>`
-        : `<div class="field">
-            <label>既定の車両管理者</label>
-            <input type="text" class="input-lg" name="defaultManager" value="${escapeHtml(v.defaultManager || '')}">
-          </div>`
-      }
+      <div class="field">
+        <label>車両管理者${isPrivate ? '(必須)' : ''}</label>
+        <input type="text" class="input-lg" name="vehicleManager" value="${escapeHtml(vehicleManagerOf(v))}" ${isPrivate ? 'required' : ''}>
+      </div>
       <div class="field">
         <label class="toggle-label"><input type="checkbox" name="active" ${v.active !== false ? 'checked' : ''}> 使用中</label>
       </div>
@@ -248,25 +240,21 @@ async function onVehicleFormSubmit(e) {
     renderVehiclesView();
     return;
   }
+  const vehicleManager = String(fd.get('vehicleManager') || '').trim();
+  if (vehicleType === 'private' && !vehicleManager) {
+    setVehicleStatus('車両管理者を入力してください', true);
+    renderVehiclesView();
+    return;
+  }
   const vehicle = {
     id: vehicleFormState.id,
     vehicleType,
     plateNumber,
     nickname: String(fd.get('nickname') || '').trim(),
     officeName: String(fd.get('officeName') || ''),
+    vehicleManager,
     active: fd.get('active') === 'on'
   };
-  if (vehicleType === 'private') {
-    const driverName = String(fd.get('driverName') || '').trim();
-    if (!driverName) {
-      setVehicleStatus('使用者名を入力してください', true);
-      renderVehiclesView();
-      return;
-    }
-    vehicle.driverName = driverName;
-  } else {
-    vehicle.defaultManager = String(fd.get('defaultManager') || '').trim();
-  }
   const result = await pushVehicleToCloud(vehicle);
   if (!result.ok) {
     vehicleFormState = vehicle;
@@ -303,12 +291,7 @@ function onVehicleExcelSelected(e) {
         if (!plateNumber) return;
         const nickname = findColumnValue(row, [/車種/, /車両名称/, /名称/]);
         const officeName = findColumnValue(row, [/事業所/]);
-        const entry = { plateNumber, nickname, officeName, vehicleType, active: true };
-        if (vehicleType === 'private') {
-          entry.driverName = findColumnValue(row, [/使用者/]);
-        } else {
-          entry.defaultManager = findColumnValue(row, [/管理者/]);
-        }
+        const entry = { plateNumber, nickname, officeName, vehicleType, active: true, vehicleManager: findColumnValue(row, [/管理者/, /使用者/]) };
         if (seenPlates.has(plateNumber)) {
           const idx = importedList.findIndex((v) => v.plateNumber === plateNumber);
           importedList[idx] = entry;
@@ -335,21 +318,13 @@ function exportVehiclesToExcel() {
   const vehicleType = vehicleActiveTab;
   const vehicles = loadVehicles().filter((v) => (v.vehicleType || 'company') === vehicleType);
   const sheetName = VEHICLE_TYPE_LABELS[vehicleType] + 'リスト';
-  const rows = vehicleType === 'private'
-    ? vehicles.map((v) => ({
-        車両番号: v.plateNumber,
-        車種_名称: v.nickname || '',
-        事業所名: v.officeName || '',
-        使用者名: v.driverName || '',
-        状態: v.active ? '使用中' : '停止中'
-      }))
-    : vehicles.map((v) => ({
-        車両番号: v.plateNumber,
-        車種_名称: v.nickname || '',
-        事業所名: v.officeName || '',
-        既定の車両管理者: v.defaultManager || '',
-        状態: v.active ? '使用中' : '停止中'
-      }));
+  const rows = vehicles.map((v) => ({
+    車両番号: v.plateNumber,
+    車種_名称: v.nickname || '',
+    事業所名: v.officeName || '',
+    車両管理者: vehicleManagerOf(v),
+    状態: v.active ? '使用中' : '停止中'
+  }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -394,14 +369,11 @@ function conflictPanelHtml(conflicts) {
     <div class="conflict-panel">
       <h3>取込内容が既存データと異なります(${conflicts.length}件)</h3>
       ${conflicts.map((c, i) => {
-        const isPrivate = c.imported.vehicleType === 'private';
-        const localExtra = isPrivate ? (c.local.driverName || '(空)') : (c.local.defaultManager || '(空)');
-        const importedExtra = isPrivate ? (c.imported.driverName || '(空)') : (c.imported.defaultManager || '(空)');
         return `
         <div class="conflict-row">
           <span class="conflict-label">${escapeHtml(c.plateNumber)}</span>
-          <span>この端末: ${escapeHtml(c.local.nickname || '(空)')} / ${escapeHtml(c.local.officeName || '(空)')} / ${escapeHtml(localExtra)}</span>
-          <span>取込データ: ${escapeHtml(c.imported.nickname || '(空)')} / ${escapeHtml(c.imported.officeName || '(空)')} / ${escapeHtml(importedExtra)}</span>
+          <span>この端末: ${escapeHtml(c.local.nickname || '(空)')} / ${escapeHtml(c.local.officeName || '(空)')} / ${escapeHtml(vehicleManagerOf(c.local) || '(空)')}</span>
+          <span>取込データ: ${escapeHtml(c.imported.nickname || '(空)')} / ${escapeHtml(c.imported.officeName || '(空)')} / ${escapeHtml(vehicleManagerOf(c.imported) || '(空)')}</span>
           <span class="conflict-choice">
             <label><input type="radio" name="conflict-${i}" value="local" checked> この端末を残す</label>
             <label><input type="radio" name="conflict-${i}" value="imported"> 取込データで更新</label>
@@ -427,11 +399,7 @@ async function applyVehicleConflictResolution() {
         target.nickname = c.imported.nickname;
         target.officeName = c.imported.officeName;
         target.active = c.imported.active;
-        if (c.imported.vehicleType === 'private') {
-          target.driverName = c.imported.driverName;
-        } else {
-          target.defaultManager = c.imported.defaultManager;
-        }
+        target.vehicleManager = vehicleManagerOf(c.imported);
       }
     }
   });
