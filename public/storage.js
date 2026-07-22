@@ -170,8 +170,11 @@ function getOrCreateMonthlyLog(vehicleRef, year, month, meta = {}) {
   return loadMonthlyLog(vehicleRef, year, month) || createEmptyMonthlyLog(vehicleRef, year, month, meta);
 }
 
-function saveMonthlyLog(record) {
-  record.updatedAt = new Date().toISOString();
+// クラウド同期時(syncMonthlyLogFromCloud)は、マージ済みレコードのupdatedAtを
+// 「今」に上書きしてはいけない(次回のマージ比較が壊れるため)。そのため
+// 「そのまま保存するだけ」のwriteMonthlyLogRawと、「今の時刻に更新してから保存する」
+// saveMonthlyLogを分離する。ローカルでの通常保存は引き続きsaveMonthlyLogを使う。
+function writeMonthlyLogRaw(record) {
   const vehicleRef = vehicleRefFor(record.vehicleId, record.privateCarLabel);
   localStorage.setItem(LOG_PREFIX + record.key, JSON.stringify(record));
 
@@ -185,6 +188,11 @@ function saveMonthlyLog(record) {
   if (existing >= 0) index[existing] = entry; else index.push(entry);
   saveLogIndex(index);
   return record;
+}
+
+function saveMonthlyLog(record) {
+  record.updatedAt = new Date().toISOString();
+  return writeMonthlyLogRaw(record);
 }
 
 // 運転記録入力画面から1日分を保存する際の便利関数
@@ -203,6 +211,169 @@ function saveFuelOnly(vehicleRef, year, month, day, fuelAdded, meta = {}) {
 
 function listMonthlyLogKeysForVehicle(vehicleRef) {
   return loadLogIndex().filter((e) => e.vehicleRef === vehicleRef);
+}
+
+// ---------------- 運転記録・給油記録のクラウド同期(Firebase Realtime Database) ----------------
+// 月報レコードは日ごとのデータ(/logs/<key>/days/<day>)とそれ以外(/logs/<key>/meta)を
+// 別々のパスに書き込む。こうすることで、Aさんが5日分・Bさんが8日分を別々の端末で
+// 保存しても、Firebase上ではそれぞれ別の場所に書き込まれ、互いの入力を上書きしない。
+function buildMetaPayload(record) {
+  return {
+    vehicleId: record.vehicleId,
+    privateCarLabel: record.privateCarLabel,
+    year: record.year,
+    month: record.month,
+    checklistMid: record.checklistMid,
+    checklistEnd: record.checklistEnd,
+    updatedAt: record.updatedAt
+  };
+}
+
+async function pushLogDayToCloud(key, day, dayData) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}/days/${day}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dayData)
+    });
+    if (!res.ok) throw new Error('Firebase write failed: ' + res.status);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function pushLogMetaToCloud(key, metaData) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}/meta.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metaData)
+    });
+    if (!res.ok) throw new Error('Firebase write failed: ' + res.status);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// ---------------- 未送信キュー(送信失敗時のリトライ用) ----------------
+// データ自体は既にlocalStorageの月報レコードに保存済み。このキューは
+// 「まだFirebaseに送れていない」という印だけを持つ(entryは{key, type, day})。
+const PENDING_LOG_SYNC_KEY = 'ug_pending_log_sync';
+
+function loadPendingLogSync() {
+  try { return JSON.parse(localStorage.getItem(PENDING_LOG_SYNC_KEY)) || []; }
+  catch { return []; }
+}
+
+function savePendingLogSync(list) {
+  localStorage.setItem(PENDING_LOG_SYNC_KEY, JSON.stringify(list));
+}
+
+function queuePendingLogSync(entry) {
+  const list = loadPendingLogSync();
+  const exists = list.some((e) => e.key === entry.key && e.type === entry.type && e.day === entry.day);
+  if (!exists) {
+    list.push(entry);
+    savePendingLogSync(list);
+  }
+}
+
+function removePendingLogSync(entry) {
+  const list = loadPendingLogSync().filter((e) => !(e.key === entry.key && e.type === entry.type && e.day === entry.day));
+  savePendingLogSync(list);
+}
+
+// キュー内の各entryについて、今のローカルレコードから最新の値を読み直して再送信する
+// (entry自体には古いデータのスナップショットを持たせず、常に「今のローカルの内容」を送る)。
+async function flushPendingLogSync() {
+  const list = loadPendingLogSync();
+  for (const entry of list) {
+    let record;
+    try { record = JSON.parse(localStorage.getItem(LOG_PREFIX + entry.key)); }
+    catch { record = null; }
+    if (!record) { removePendingLogSync(entry); continue; }
+    const result = entry.type === 'day'
+      ? await pushLogDayToCloud(entry.key, entry.day, record.days[entry.day])
+      : await pushLogMetaToCloud(entry.key, buildMetaPayload(record));
+    if (result.ok) removePendingLogSync(entry);
+  }
+}
+
+// 運転記録入力・給油入力の保存直後に呼ぶ、fire-and-forgetの送信関数。
+// 呼び出し側はPromiseを待たない(ローカル保存は既に完了しているため)。
+function syncLogDayToCloud(key, day, dayData) {
+  pushLogDayToCloud(key, day, dayData).then((result) => {
+    if (!result.ok) queuePendingLogSync({ key, type: 'day', day });
+    flushPendingLogSync();
+  });
+}
+
+function syncLogMetaToCloud(key, metaData) {
+  pushLogMetaToCloud(key, metaData).then((result) => {
+    if (!result.ok) queuePendingLogSync({ key, type: 'meta', day: undefined });
+    flushPendingLogSync();
+  });
+}
+
+// 運転月報を開いた際に呼ぶ。クラウドの該当月報を取得し、日ごと・meta単位で
+// updatedAtの新しい方をローカルへマージする。ローカルにまだ無い月報(この端末では
+// 初めて開く月報)の場合は、meta引数(vehicleId/privateCarLabel)でシェルを作ってから
+// マージする(でなければiPhoneでしか入力されていない月報がPCに一切反映されない)。
+// その際、シェルのupdatedAtは「今」ではなく未設定(null)として扱い、クラウド側の
+// meta.updatedAtと比較させる(createEmptyMonthlyLogは通常時刻を今にするが、ここでは
+// 「ローカルに保存履歴が一切無い」ことを表すためnullに上書きする)。
+// 何かが変わった場合はwriteMonthlyLogRaw(updatedAtを今に書き換えない保存)で永続化し、
+// 合成後のレコードを返す。何も変わらなければnullを返す。
+async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
+  const key = monthlyLogKey(vehicleRef, year, month);
+  let cloudData;
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}.json`);
+    if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
+    cloudData = await res.json();
+  } catch {
+    return null;
+  }
+  if (!cloudData) return null;
+
+  const existingLocal = loadMonthlyLog(vehicleRef, year, month);
+  const local = existingLocal || createEmptyMonthlyLog(vehicleRef, year, month, meta);
+  if (!existingLocal) local.updatedAt = null;
+
+  let changed = false;
+
+  const cloudDays = cloudData.days || {};
+  for (let d = 1; d <= 31; d++) {
+    const cloudDay = cloudDays[d];
+    if (!cloudDay) continue;
+    const localDay = local.days[d];
+    const localTime = localDay && localDay.updatedAt ? Date.parse(localDay.updatedAt) : -Infinity;
+    const cloudTime = cloudDay.updatedAt ? Date.parse(cloudDay.updatedAt) : -Infinity;
+    if (cloudTime > localTime) {
+      local.days[d] = cloudDay;
+      changed = true;
+    }
+  }
+
+  const cloudMeta = cloudData.meta;
+  if (cloudMeta) {
+    const localTime = local.updatedAt ? Date.parse(local.updatedAt) : -Infinity;
+    const cloudTime = cloudMeta.updatedAt ? Date.parse(cloudMeta.updatedAt) : -Infinity;
+    if (cloudTime > localTime) {
+      local.checklistMid = cloudMeta.checklistMid || local.checklistMid;
+      local.checklistEnd = cloudMeta.checklistEnd || local.checklistEnd;
+      local.updatedAt = cloudMeta.updatedAt;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    writeMonthlyLogRaw(local);
+    return local;
+  }
+  return null;
 }
 
 // ---------------- 日常点検イベント(15日・月末点検) ----------------
