@@ -31,6 +31,10 @@ function sanitizeKey(s) {
   return String(s || '').trim().replace(/\s+/g, '_').replace(/[^\w\-぀-ヿ一-鿿]/g, '');
 }
 
+function vehicleManagerOf(v) {
+  return v.vehicleManager ?? v.defaultManager ?? v.driverName ?? '';
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -153,7 +157,6 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     vehicleId: meta.vehicleId ?? null,
     privateCarLabel: meta.privateCarLabel ?? null,
     year, month,
-    vehicleManager: meta.vehicleManager ?? '',
     days,
     // 項目文言はFIXED_CHECKLIST_ITEMSから表示時に都度参照する(ここではresultだけ保持する)。
     // レコードに文言を焼き込まないことで、将来文言を直しても既存データの表示が自動的に追従する。
@@ -344,9 +347,7 @@ function mergeVehicles(localList, importedList) {
     const fieldsDiffer = existing.nickname !== iv.nickname
       || existing.officeName !== iv.officeName
       || existing.active !== iv.active
-      || (iv.vehicleType === 'private'
-        ? existing.driverName !== iv.driverName
-        : existing.defaultManager !== iv.defaultManager);
+      || vehicleManagerOf(existing) !== vehicleManagerOf(iv);
     if (fieldsDiffer) {
       conflicts.push({ plateNumber: iv.plateNumber, local: existing, imported: iv });
     }

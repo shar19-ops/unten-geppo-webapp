@@ -226,8 +226,7 @@ function resolveVehicleSelection(fd) {
   const vehicleId = fd.get('vehicleId');
   if (!vehicleId) return { error: tripUsePrivateCar ? '私有車を選択してください' : '車両を選択してください' };
   const vehicle = vehicles.find((v) => v.id === vehicleId);
-  const vehicleManager = (vehicle && vehicle.vehicleType !== 'private') ? (vehicle.defaultManager || '') : '';
-  return { vehicleId, privateCarLabel: null, vehicleManager, vehicle };
+  return { vehicleId, privateCarLabel: null, vehicle };
 }
 
 function onTripEntrySubmit(e) {
@@ -244,7 +243,7 @@ function onTripEntrySubmit(e) {
     renderTripEntryView();
     return;
   }
-  const { vehicleId, privateCarLabel, vehicleManager } = sel;
+  const { vehicleId, privateCarLabel } = sel;
 
   const vehicleRef = vehicleRefFor(vehicleId, privateCarLabel);
   const existing = loadMonthlyLog(vehicleRef, year, month);
@@ -261,7 +260,7 @@ function onTripEntrySubmit(e) {
     alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck'))
   };
 
-  const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, vehicleManager, updatedBy: driver });
+  const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, updatedBy: driver });
   if (driver) pushRecentDriver(driver);
 
   tripPendingChecklists = checklistEventsDue(savedRecord, day).map((d) => ({ ...d, vehicleRef, year, month, day }));
@@ -285,7 +284,7 @@ function onFuelEntrySubmit(e) {
     renderTripEntryView();
     return;
   }
-  const { vehicleId, privateCarLabel, vehicleManager } = sel;
+  const { vehicleId, privateCarLabel } = sel;
   const fuelAdded = parseNumberOrNull(fd.get('fuelAdded'));
   if (fuelAdded == null) {
     tripStatusMessage = '給油量を入力してください';
@@ -295,7 +294,7 @@ function onFuelEntrySubmit(e) {
   }
 
   const vehicleRef = vehicleRefFor(vehicleId, privateCarLabel);
-  saveFuelOnly(vehicleRef, year, month, day, fuelAdded, { vehicleId, privateCarLabel, vehicleManager });
+  saveFuelOnly(vehicleRef, year, month, day, fuelAdded, { vehicleId, privateCarLabel });
 
   tripStatusMessage = `給油量を記録しました(${year}年${month}月${day}日・${fuelAdded}L)`;
   tripStatusIsError = false;
