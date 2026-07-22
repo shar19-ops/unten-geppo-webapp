@@ -1,4 +1,4 @@
-// 車両リスト管理画面(社有車・私有車)。データはすべてstorage.js経由(loadVehicles/saveVehicle/deleteVehicle/mergeVehicles)。
+// 車両リスト管理画面(社有車・私有車)。データはすべてstorage.js経由(loadVehicles/pushVehicleToCloud/deleteVehicleFromCloud/pushVehiclesToCloud/mergeVehicles)。車両マスタはFirebaseと同期される。
 
 const VEHICLE_TYPE_LABELS = { company: '社有車', private: '私有車' };
 
@@ -108,10 +108,15 @@ function renderVehiclesView() {
     });
   });
   root.querySelectorAll('.vehicle-delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const v = allVehicles.find((x) => x.id === btn.dataset.id);
       if (confirm(`「${v.plateNumber}」を削除します。よろしいですか?`)) {
-        deleteVehicle(v.id);
+        const result = await deleteVehicleFromCloud(v.id);
+        if (!result.ok) {
+          setVehicleStatus('削除できませんでした(通信エラー)', true);
+          renderVehiclesView();
+          return;
+        }
         setVehicleStatus(`削除しました(${v.plateNumber})`, false);
         renderVehiclesView();
       }
@@ -229,7 +234,7 @@ function vehicleFormHtml(v) {
   `;
 }
 
-function onVehicleFormSubmit(e) {
+async function onVehicleFormSubmit(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
   const plateNumber = String(fd.get('plateNumber') || '').trim();
@@ -261,7 +266,12 @@ function onVehicleFormSubmit(e) {
   } else {
     vehicle.defaultManager = String(fd.get('defaultManager') || '').trim();
   }
-  saveVehicle(vehicle);
+  const result = await pushVehicleToCloud(vehicle);
+  if (!result.ok) {
+    setVehicleStatus('保存できませんでした(通信エラー)', true);
+    renderVehiclesView();
+    return;
+  }
   setVehicleStatus(`保存しました(${plateNumber})`, false);
   vehicleFormState = null;
   renderVehiclesView();
@@ -353,20 +363,25 @@ async function onVehicleJsonSelected(e) {
   try {
     const data = await readJsonFile(file);
     if (!Array.isArray(data)) throw new Error('車両リストのJSONファイルではないようです');
-    applyVehicleImport(data, `JSONから${data.length}件読み込みました`);
+    await applyVehicleImport(data, `JSONから${data.length}件読み込みました`);
   } catch (err) {
     setVehicleStatus('JSONファイルを読み込めませんでした: ' + err.message, true);
     renderVehiclesView();
   }
 }
 
-function applyVehicleImport(importedList, successMessage) {
+async function applyVehicleImport(importedList, successMessage) {
   const { merged, conflicts } = mergeVehicles(loadVehicles(), importedList);
   if (conflicts.length) {
     vehicleImportConflicts = { merged, conflicts };
     setVehicleStatus(`${conflicts.length}件の車両で内容の食い違いがあります。下で選んで適用してください。`, true);
   } else {
-    saveVehicles(merged);
+    const result = await pushVehiclesToCloud(merged);
+    if (!result.ok) {
+      setVehicleStatus('保存できませんでした(通信エラー)', true);
+      renderVehiclesView();
+      return;
+    }
     setVehicleStatus(successMessage, false);
   }
   renderVehiclesView();
@@ -400,7 +415,7 @@ function conflictPanelHtml(conflicts) {
   `;
 }
 
-function applyVehicleConflictResolution() {
+async function applyVehicleConflictResolution() {
   const { merged, conflicts } = vehicleImportConflicts;
   conflicts.forEach((c, i) => {
     const choice = document.querySelector(`input[name="conflict-${i}"]:checked`).value;
@@ -418,7 +433,13 @@ function applyVehicleConflictResolution() {
       }
     }
   });
-  saveVehicles(merged);
+  const result = await pushVehiclesToCloud(merged);
+  if (!result.ok) {
+    setVehicleStatus('保存できませんでした(通信エラー)', true);
+    vehicleImportConflicts = null;
+    renderVehiclesView();
+    return;
+  }
   vehicleImportConflicts = null;
   setVehicleStatus('取込内容を適用しました', false);
   renderVehiclesView();

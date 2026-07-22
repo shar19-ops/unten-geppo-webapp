@@ -53,25 +53,6 @@ function saveVehicles(list) {
   localStorage.setItem(VEHICLES_KEY, JSON.stringify(list));
 }
 
-function saveVehicle(vehicle) {
-  const list = loadVehicles();
-  const now = new Date().toISOString();
-  const idx = list.findIndex((v) => v.id === vehicle.id);
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], ...vehicle, updatedAt: now };
-  } else {
-    list.push({ ...vehicle, id: vehicle.id || generateId(), createdAt: now, updatedAt: now });
-  }
-  saveVehicles(list);
-  return list;
-}
-
-function deleteVehicle(vehicleId) {
-  const list = loadVehicles().filter((v) => v.id !== vehicleId);
-  saveVehicles(list);
-  return list;
-}
-
 // ---------------- 車両マスタのクラウド同期(Firebase Realtime Database) ----------------
 // Firebase SDKは使わず、素のfetch()のみで読み書きする(ビルド不要という既存方針に合わせる)。
 // ルールは{".read":true,".write":true}(全開放)の前提。DB URLの末尾にスラッシュは付けない。
