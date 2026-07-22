@@ -24,7 +24,12 @@ function reportVehicleOptions() {
   const legacyPrivateOptions = Array.from(privateRefs.entries()).map(([ref, label]) => ({
     ref, label: `${label}（私有車・未登録）`, vehicleId: null, privateCarLabel: label
   }));
-  return [...vehicles, ...legacyPrivateOptions];
+  const allOptions = [...vehicles, ...legacyPrivateOptions];
+  if (tripQrVehicleId) {
+    const locked = allOptions.filter((o) => o.ref === tripQrVehicleId);
+    if (locked.length) return locked;
+  }
+  return allOptions;
 }
 
 function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
@@ -78,9 +83,12 @@ function renderReportView() {
       <div class="panel-head">
         <h2>運転月報</h2>
         <div class="panel-actions">
-          <select class="input-sm" id="reportVehicleSelect">
-            ${options.map((o) => `<option value="${escapeHtml(o.ref)}" ${o.ref === reportSelectedRef ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
-          </select>
+          ${tripQrVehicleId
+            ? `<span class="input-sm">${escapeHtml(selectedOption.label)}</span>`
+            : `<select class="input-sm" id="reportVehicleSelect">
+                ${options.map((o) => `<option value="${escapeHtml(o.ref)}" ${o.ref === reportSelectedRef ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+              </select>`
+          }
           <select class="input-sm" id="reportMonthSelect">
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === reportSelectedYear && m.month === reportSelectedMonth ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
           </select>
@@ -134,11 +142,14 @@ function renderReportView() {
     </div>
   `;
 
-  document.getElementById('reportVehicleSelect').addEventListener('change', (e) => {
-    reportSelectedRef = e.target.value;
-    reportImportConflicts = null;
-    renderReportView();
-  });
+  const reportVehicleSelectEl = document.getElementById('reportVehicleSelect');
+  if (reportVehicleSelectEl) {
+    reportVehicleSelectEl.addEventListener('change', (e) => {
+      reportSelectedRef = e.target.value;
+      reportImportConflicts = null;
+      renderReportView();
+    });
+  }
   document.getElementById('reportMonthSelect').addEventListener('change', (e) => {
     const [y, m] = e.target.value.split('-').map(Number);
     reportSelectedYear = y; reportSelectedMonth = m;
