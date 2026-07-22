@@ -16,13 +16,16 @@ function loadScriptOnce(src) {
   });
 }
 
-function showView(name) {
+async function showView(name) {
   VIEWS.forEach((v) => {
     document.getElementById(`view-${v}`).classList.toggle('active', v === name);
     document.querySelector(`.tab-btn[data-view="${v}"]`).classList.toggle('active', v === name);
   });
   document.body.dataset.view = name;
-  if (name === 'vehicles') renderVehiclesView();
+  if (name === 'vehicles') {
+    await syncVehiclesFromCloud();
+    renderVehiclesView();
+  }
   if (name === 'trip-entry') renderTripEntryView();
   if (name === 'report') renderReportView();
 }
@@ -209,8 +212,11 @@ if (window.caches) {
   caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
-// QRコードからの起動処理(社有車・私有車問わず?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
-(function applyQrVehicleParam() {
+// アプリ起動処理: 車両マスタをFirebaseから同期してから、QRパラメータの解決・初期画面表示を行う
+// (社有車・私有車問わず?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
+async function bootstrapApp() {
+  await syncVehiclesFromCloud();
+
   const params = new URLSearchParams(location.search);
   const qrVehicleId = params.get('vehicle');
   if (qrVehicleId) {
@@ -226,6 +232,12 @@ if (window.caches) {
     }
     history.replaceState(null, '', location.pathname);
   }
-})();
 
-showView('trip-entry');
+  // 同期待ちの間にユーザーが別タブ(運転月報など)を手動でクリックしていた場合、
+  // それを上書きして運転記録入力に戻さないようにするためのガード
+  if (!document.body.dataset.view) {
+    showView('trip-entry');
+  }
+}
+
+bootstrapApp();
