@@ -6,6 +6,7 @@ let reportSelectedMonth = null;
 let reportStatusMessage = '';
 let reportStatusIsError = false;
 let reportImportConflicts = null; // {merged, conflicts}
+let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
 
 function reportVehicleOptions() {
   const vehicles = loadVehicles().map((v) => ({
@@ -72,6 +73,18 @@ function renderReportView() {
     || createEmptyMonthlyLog(reportSelectedRef, reportSelectedYear, reportSelectedMonth, {
       vehicleId: selectedOption.vehicleId, privateCarLabel: selectedOption.privateCarLabel
     });
+
+  // この車両・年月の組み合わせを表示するのが初めてなら、クラウドの最新データを取得して
+  // マージする(画面を開いている間の自動更新はしない。車両・月を選び直すか、タブを
+  // 開き直した時だけ再取得する — app.jsのshowViewがreportSyncedKeyをnullに戻す)。
+  if (reportSyncedKey !== record.key) {
+    reportSyncedKey = record.key;
+    syncMonthlyLogFromCloud(reportSelectedRef, reportSelectedYear, reportSelectedMonth, {
+      vehicleId: selectedOption.vehicleId, privateCarLabel: selectedOption.privateCarLabel
+    }).then((mergedRecord) => {
+      if (mergedRecord) renderReportView();
+    });
+  }
 
   const totals = computeTotals(record.days);
   const holidays = computeJapaneseHolidays(record.year);
@@ -235,8 +248,8 @@ function logConflictPanelHtml(conflicts) {
       <h3>取込内容が既存データと異なります(${conflicts.length}件)</h3>
       ${conflicts.map((c, i) => {
         const label = c.type === 'day' ? `${c.day}日` : `点検(${c.label})`;
-        const localText = c.type === 'day' ? `${c.local.destination || ''} / ${c.local.driver || ''}` : c.local;
-        const importedText = c.type === 'day' ? `${c.imported.destination || ''} / ${c.imported.driver || ''}` : c.imported;
+        const localText = c.type === 'day' ? `${escapeHtml(c.local.destination || '')} / ${escapeHtml(c.local.driver || '')}` : escapeHtml(c.local);
+        const importedText = c.type === 'day' ? `${escapeHtml(c.imported.destination || '')} / ${escapeHtml(c.imported.driver || '')}` : escapeHtml(c.imported);
         return `
           <div class="conflict-row">
             <span class="conflict-label">${label}</span>
@@ -283,8 +296,8 @@ function reportBlock(days, startDay, endDay, year, month, holidays) {
         <td class="day-cell ${colorClass}">${d}</td>
         <td class="num-cell meter-cell">${day.meterReading != null ? day.meterReading.toLocaleString() : ''}</td>
         <td class="num-cell distance-cell">${distance !== '' ? distance.toLocaleString() : ''}</td>
-        <td class="dest-cell">${day.destination || ''}</td>
-        <td class="driver-cell">${day.driver || ''}</td>
+        <td class="dest-cell">${escapeHtml(day.destination || '')}</td>
+        <td class="driver-cell">${escapeHtml(day.driver || '')}</td>
         <td class="num-cell">${day.alcoholCheck != null ? day.alcoholCheck : ''}</td>
         <td class="num-cell">${day.fuelAdded != null ? day.fuelAdded.toFixed(2) : ''}</td>
       </tr>
@@ -317,7 +330,7 @@ function checklistBlock(headerNote, items) {
     <tr>
       <td class="checklist-num">${i + 1}</td>
       <td class="checklist-item">${FIXED_CHECKLIST_ITEMS[i]}</td>
-      <td class="checklist-result">${item.result || ''}</td>
+      <td class="checklist-result">${escapeHtml(item.result || '')}</td>
     </tr>
   `).join('');
   return `

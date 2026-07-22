@@ -27,7 +27,12 @@ async function showView(name) {
     renderVehiclesView();
   }
   if (name === 'trip-entry') renderTripEntryView();
-  if (name === 'report') renderReportView();
+  if (name === 'report') {
+    // タブを開くたび(既に開いている状態からの再クリックも含む)にクラウドから
+    // 最新の月報データを取り直させるため、直近の同期済みキーの記録をリセットする。
+    reportSyncedKey = null;
+    renderReportView();
+  }
 }
 
 // サンプルExcelのG列数式ロジックを再現する共通関数。
@@ -219,6 +224,7 @@ if (window.caches) {
 // (社有車・私有車問わず?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
 async function bootstrapApp() {
   await syncVehiclesFromCloud();
+  flushPendingLogSync();
 
   const params = new URLSearchParams(location.search);
   const qrVehicleId = params.get('vehicle');
