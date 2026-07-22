@@ -142,6 +142,7 @@ function renderReportView() {
 
       ${reportBlock(record.days, 1, 15, record.year, record.month, holidays)}
       ${checklistBlock('点検日15日', record.checklistMid)}
+      <p class="print-page-number">1 / 2</p>
       <div class="report-page2">
         ${reportBlock(record.days, 16, 31, record.year, record.month, holidays)}
 
@@ -154,6 +155,7 @@ function renderReportView() {
         </table>
 
         ${checklistBlock('点検日は月の末日', record.checklistEnd)}
+        <p class="print-page-number">2 / 2</p>
       </div>
     </div>
   `;
