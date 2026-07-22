@@ -79,7 +79,7 @@ function renderReportView() {
         <h2>運転月報</h2>
         <div class="panel-actions">
           <select class="input-sm" id="reportVehicleSelect">
-            ${options.map((o) => `<option value="${o.ref}" ${o.ref === reportSelectedRef ? 'selected' : ''}>${o.label}</option>`).join('')}
+            ${options.map((o) => `<option value="${escapeHtml(o.ref)}" ${o.ref === reportSelectedRef ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
           </select>
           <select class="input-sm" id="reportMonthSelect">
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === reportSelectedYear && m.month === reportSelectedMonth ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
@@ -94,12 +94,12 @@ function renderReportView() {
       <div class="inline-form">
         <div class="field">
           <label>事業所名</label>
-          <input type="text" class="input-lg" value="${officeName}" readonly>
+          <input type="text" class="input-lg" value="${escapeHtml(officeName)}" readonly>
           <p class="hint">※ 車両リストの車両登録内容から転記されます。未登録の私有車には転記元がないため空欄です。</p>
         </div>
         <div class="field">
           <label>車両管理者</label>
-          <input type="text" class="input-lg" id="reportManagerInput" value="${record.vehicleManager || ''}">
+          <input type="text" class="input-lg" id="reportManagerInput" value="${escapeHtml(record.vehicleManager || '')}">
         </div>
       </div>
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
@@ -108,11 +108,11 @@ function renderReportView() {
 
     <div class="report-sheet">
       <div class="report-header">
-        <div class="report-header-cell">事業所名<br><strong>${officeName}</strong></div>
+        <div class="report-header-cell">事業所名<br><strong>${escapeHtml(officeName)}</strong></div>
         <div class="report-header-cell report-title">${record.year}年　${record.month}月　運転月報</div>
         <div class="report-header-cell">
-          車両管理者：<strong>${record.vehicleManager || ''}</strong><br>
-          車両番号：<strong>${selectedOption.vehicleId ? (vehicle || {}).plateNumber || '' : (record.privateCarLabel || '')}</strong>
+          車両管理者：<strong>${escapeHtml(record.vehicleManager || '')}</strong><br>
+          車両番号：<strong>${escapeHtml(selectedOption.vehicleId ? (vehicle || {}).plateNumber || '' : (record.privateCarLabel || ''))}</strong>
         </div>
       </div>
 

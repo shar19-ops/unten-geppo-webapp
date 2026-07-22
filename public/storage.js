@@ -31,6 +31,12 @@ function sanitizeKey(s) {
   return String(s || '').trim().replace(/\s+/g, '_').replace(/[^\w\-぀-ヿ一-鿿]/g, '');
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }

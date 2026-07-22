@@ -70,7 +70,7 @@ function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
       </div>
       ${vehicles.length
         ? `<select name="vehicleId" class="input-lg">
-            ${vehicles.map((v) => `<option value="${v.id}" ${tripQrVehicleId === v.id ? 'selected' : ''}>${v.plateNumber}（${v.nickname || '車種未設定'}）</option>`).join('')}
+            ${vehicles.map((v) => `<option value="${escapeHtml(v.id)}" ${tripQrVehicleId === v.id ? 'selected' : ''}>${escapeHtml(v.plateNumber)}（${escapeHtml(v.nickname || '車種未設定')}）</option>`).join('')}
           </select>`
         : `<p class="hint">${emptyHint}</p>`
       }

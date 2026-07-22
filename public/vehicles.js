@@ -117,7 +117,7 @@ function renderVehiclesView() {
           renderVehiclesView();
           return;
         }
-        setVehicleStatus(`削除しました(${v.plateNumber})`, false);
+        setVehicleStatus(`削除しました(${escapeHtml(v.plateNumber)})`, false);
         renderVehiclesView();
       }
     });
@@ -158,17 +158,18 @@ function setVehicleStatus(message, isError) {
 function vehicleRow(v) {
   const isPrivate = (v.vehicleType || 'company') === 'private';
   const lastCol = isPrivate ? (v.driverName || '') : (v.defaultManager || '');
+  const id = escapeHtml(v.id);
   return `
     <tr>
-      <td>${v.plateNumber}</td>
-      <td>${v.nickname || ''}</td>
-      <td>${v.officeName || ''}</td>
-      <td>${lastCol}</td>
+      <td>${escapeHtml(v.plateNumber)}</td>
+      <td>${escapeHtml(v.nickname || '')}</td>
+      <td>${escapeHtml(v.officeName || '')}</td>
+      <td>${escapeHtml(lastCol)}</td>
       <td><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? '使用中' : '停止中'}</span></td>
       <td class="row-actions">
-        <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${v.id}">QRコード</button>
-        <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${v.id}">編集</button>
-        <button class="btn btn-text btn-danger vehicle-delete-btn" type="button" data-id="${v.id}">削除</button>
+        <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${id}">QRコード</button>
+        <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${id}">編集</button>
+        <button class="btn btn-text btn-danger vehicle-delete-btn" type="button" data-id="${id}">削除</button>
       </td>
     </tr>
   `;
@@ -179,14 +180,14 @@ function qrPanelHtml(state) {
   return `
     <div class="panel qr-panel" id="vehicleQrPanel">
       <div class="panel-head no-print">
-        <h2>QRコード: ${vehicle.plateNumber}</h2>
+        <h2>QRコード: ${escapeHtml(vehicle.plateNumber)}</h2>
         <div class="panel-actions">
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
         </div>
       </div>
       <div class="qr-print-area">
-        <p class="qr-vehicle-label">${vehicle.plateNumber}${vehicle.nickname ? `(${vehicle.nickname})` : ''}</p>
+        <p class="qr-vehicle-label">${escapeHtml(vehicle.plateNumber)}${vehicle.nickname ? `(${escapeHtml(vehicle.nickname)})` : ''}</p>
         <div class="qr-image">${svg}</div>
         <p class="qr-url hint no-print">${url}</p>
       </div>
@@ -200,11 +201,11 @@ function vehicleFormHtml(v) {
     <form class="inline-form" id="vehicleForm">
       <div class="field">
         <label>車両番号(必須)</label>
-        <input type="text" class="input-lg" name="plateNumber" value="${v.plateNumber || ''}" required>
+        <input type="text" class="input-lg" name="plateNumber" value="${escapeHtml(v.plateNumber || '')}" required>
       </div>
       <div class="field">
         <label>車種／名称</label>
-        <input type="text" class="input-lg" name="nickname" value="${v.nickname || ''}">
+        <input type="text" class="input-lg" name="nickname" value="${escapeHtml(v.nickname || '')}">
       </div>
       <div class="field">
         <label>事業所名</label>
@@ -216,11 +217,11 @@ function vehicleFormHtml(v) {
       ${isPrivate
         ? `<div class="field">
             <label>使用者名(必須)</label>
-            <input type="text" class="input-lg" name="driverName" value="${v.driverName || ''}" required>
+            <input type="text" class="input-lg" name="driverName" value="${escapeHtml(v.driverName || '')}" required>
           </div>`
         : `<div class="field">
             <label>既定の車両管理者</label>
-            <input type="text" class="input-lg" name="defaultManager" value="${v.defaultManager || ''}">
+            <input type="text" class="input-lg" name="defaultManager" value="${escapeHtml(v.defaultManager || '')}">
           </div>`
       }
       <div class="field">
@@ -398,9 +399,9 @@ function conflictPanelHtml(conflicts) {
         const importedExtra = isPrivate ? (c.imported.driverName || '(空)') : (c.imported.defaultManager || '(空)');
         return `
         <div class="conflict-row">
-          <span class="conflict-label">${c.plateNumber}</span>
-          <span>この端末: ${c.local.nickname || '(空)'} / ${c.local.officeName || '(空)'} / ${localExtra}</span>
-          <span>取込データ: ${c.imported.nickname || '(空)'} / ${c.imported.officeName || '(空)'} / ${importedExtra}</span>
+          <span class="conflict-label">${escapeHtml(c.plateNumber)}</span>
+          <span>この端末: ${escapeHtml(c.local.nickname || '(空)')} / ${escapeHtml(c.local.officeName || '(空)')} / ${escapeHtml(localExtra)}</span>
+          <span>取込データ: ${escapeHtml(c.imported.nickname || '(空)')} / ${escapeHtml(c.imported.officeName || '(空)')} / ${escapeHtml(importedExtra)}</span>
           <span class="conflict-choice">
             <label><input type="radio" name="conflict-${i}" value="local" checked> この端末を残す</label>
             <label><input type="radio" name="conflict-${i}" value="imported"> 取込データで更新</label>
