@@ -30,18 +30,21 @@ async function showView(name) {
   if (name === 'report') renderReportView();
 }
 
-// サンプルExcelのG列数式ロジックを再現する共通関数
-// distance(day n) = meter(day n+1) - meter(day n) (n=1..14, 16..30)
-// distance(day 15) = meter(day 16) - meter(day 15) (点検欄行をまたいでブロック2に接続)
-// distance(day 31) = 空欄(day32が存在しないため)
+// サンプルExcelのG列数式ロジックを再現する共通関数。
+// distance(day n) = meter(次にメーター指針が記録されている日) - meter(day n)
+// 休日等で翌日以降のメーター指針が未入力の場合は、月末(31日)までの間で
+// 次に記録されている日まで遡って差分を取る(間の空欄日はスキップする)。
+// 記録されている日が月末までに無い場合、または対象日自体が未入力の場合は空欄。
 function computeDistance(days, day) {
   const cur = days[day];
   if (!cur || cur.meterReading == null) return '';
-  const nextDay = day === 31 ? null : day + 1;
-  if (nextDay === null) return '';
-  const next = days[nextDay];
-  if (!next || next.meterReading == null) return '';
-  return next.meterReading - cur.meterReading;
+  for (let d = day + 1; d <= 31; d++) {
+    const next = days[d];
+    if (next && next.meterReading != null) {
+      return next.meterReading - cur.meterReading;
+    }
+  }
+  return '';
 }
 
 // --- 日本の祝日判定(振替休日込み、春分・秋分は近似式) ---
