@@ -75,9 +75,10 @@ function renderReportView() {
 
   const totals = computeTotals(record.days);
   const holidays = computeJapaneseHolidays(record.year);
-  // 事業所名は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
+  // 事業所名・車両管理者は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
   const vehicle = selectedOption.vehicleId ? loadVehicles().find((v) => v.id === selectedOption.vehicleId) : null;
   const officeName = vehicle ? (vehicle.officeName || '') : '';
+  const vehicleManager = vehicle ? vehicleManagerOf(vehicle) : '';
 
   root.innerHTML = `
     <div class="panel no-print">
@@ -108,7 +109,8 @@ function renderReportView() {
         </div>
         <div class="field">
           <label>車両管理者</label>
-          <input type="text" class="input-lg" id="reportManagerInput" value="${escapeHtml(record.vehicleManager || '')}">
+          <input type="text" class="input-lg" value="${escapeHtml(vehicleManager)}" readonly>
+          <p class="hint">※ 車両リストの車両登録内容から転記されます。未登録の私有車には転記元がないため空欄です。</p>
         </div>
       </div>
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
@@ -120,7 +122,7 @@ function renderReportView() {
         <div class="report-header-cell">事業所名<br><strong>${escapeHtml(officeName)}</strong></div>
         <div class="report-header-cell report-title">${record.year}年　${record.month}月　運転月報</div>
         <div class="report-header-cell">
-          車両管理者：<strong>${escapeHtml(record.vehicleManager || '')}</strong><br>
+          車両管理者：<strong>${escapeHtml(vehicleManager)}</strong><br>
           車両番号：<strong>${escapeHtml(selectedOption.vehicleId ? (vehicle || {}).plateNumber || '' : (record.privateCarLabel || ''))}</strong>
         </div>
       </div>
@@ -157,11 +159,6 @@ function renderReportView() {
     reportImportConflicts = null;
     renderReportView();
   });
-  document.getElementById('reportManagerInput').addEventListener('blur', (e) => {
-    record.vehicleManager = e.target.value.trim();
-    saveMonthlyLog(record);
-    renderReportView();
-  });
   document.getElementById('reportPrintBtn').addEventListener('click', () => window.print());
   document.getElementById('xlsxExportBtn').addEventListener('click', async () => {
     reportStatusMessage = '出力しています…';
@@ -170,7 +167,7 @@ function renderReportView() {
     try {
       await loadScriptOnce('vendor/exceljs/exceljs.min.js');
       const vehicleLabel = selectedOption.vehicleId ? (vehicle || {}).plateNumber : record.privateCarLabel;
-      await exportMonthlyLogToXlsx(record, vehicleLabel, officeName);
+      await exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleManager);
       reportStatusMessage = 'Excelファイルを出力しました';
       reportStatusIsError = false;
     } catch (err) {

@@ -10,7 +10,7 @@ function dayRow(day) {
   return day <= 15 ? 6 + day : day + 15;
 }
 
-async function exportMonthlyLogToXlsx(record, vehicleLabel, officeName) {
+async function exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleManager) {
   const resp = await fetch(TEMPLATE_URL);
   if (!resp.ok) throw new Error('テンプレートファイルを読み込めませんでした');
   const buf = await resp.arrayBuffer();
@@ -24,7 +24,7 @@ async function exportMonthlyLogToXlsx(record, vehicleLabel, officeName) {
   ws.getCell('A4').value = record.year;
   ws.getCell('E4').value = record.month;
   cover.getCell('E29').value = vehicleLabel || record.privateCarLabel || '';
-  cover.getCell('E30').value = record.vehicleManager || '';
+  cover.getCell('E30').value = vehicleManager || '';
 
   for (let d = 1; d <= 31; d++) {
     const day = record.days[d] || {};
