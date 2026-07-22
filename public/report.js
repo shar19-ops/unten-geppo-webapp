@@ -66,6 +66,7 @@ function renderReportView() {
   if (!reportSelectedMonth) reportSelectedMonth = now.getMonth() + 1;
 
   const selectedOption = options.find((o) => o.ref === reportSelectedRef);
+  const isLocked = tripQrVehicleId && options.length === 1 && options[0].ref === tripQrVehicleId;
   const monthOptions = buildMonthOptions(reportSelectedRef, reportSelectedYear, reportSelectedMonth);
   const record = loadMonthlyLog(reportSelectedRef, reportSelectedYear, reportSelectedMonth)
     || createEmptyMonthlyLog(reportSelectedRef, reportSelectedYear, reportSelectedMonth, {
@@ -83,7 +84,7 @@ function renderReportView() {
       <div class="panel-head">
         <h2>運転月報</h2>
         <div class="panel-actions">
-          ${tripQrVehicleId
+          ${isLocked
             ? `<span class="input-sm">${escapeHtml(selectedOption.label)}</span>`
             : `<select class="input-sm" id="reportVehicleSelect">
                 ${options.map((o) => `<option value="${escapeHtml(o.ref)}" ${o.ref === reportSelectedRef ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
