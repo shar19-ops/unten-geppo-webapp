@@ -1,6 +1,7 @@
 // データアクセス層。vehicles.js/trip-entry.js/report.jsはこのファイルの関数経由でのみ
-// データに触れる。車両マスタはFirebase Realtime Databaseと同期し(syncVehiclesFromCloud等)、
-// 運転記録(月報・給油記録)は引き続きlocalStorageのみで完結する。
+// データに触れる。車両マスタ・運転記録(月報・給油記録)ともにFirebase Realtime Databaseと
+// 同期する(syncVehiclesFromCloud/syncLogDayToCloud/syncLogMetaToCloud/syncMonthlyLogFromCloud等)。
+// ローカル保存(localStorage)は常に即座に完了し、クラウド送信はその後バックグラウンドで行う。
 
 const VEHICLES_KEY = 'ug_vehicles';
 const LOG_PREFIX = 'ug_log_';
@@ -162,6 +163,7 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     // レコードに文言を焼き込まないことで、将来文言を直しても既存データの表示が自動的に追従する。
     checklistMid: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
     checklistEnd: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
+    metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
 }
@@ -225,7 +227,7 @@ function buildMetaPayload(record) {
     month: record.month,
     checklistMid: record.checklistMid,
     checklistEnd: record.checklistEnd,
-    updatedAt: record.updatedAt
+    updatedAt: record.metaUpdatedAt
   };
 }
 
@@ -359,12 +361,12 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
 
   const cloudMeta = cloudData.meta;
   if (cloudMeta) {
-    const localTime = local.updatedAt ? Date.parse(local.updatedAt) : -Infinity;
+    const localTime = local.metaUpdatedAt ? Date.parse(local.metaUpdatedAt) : -Infinity;
     const cloudTime = cloudMeta.updatedAt ? Date.parse(cloudMeta.updatedAt) : -Infinity;
     if (cloudTime > localTime) {
       local.checklistMid = cloudMeta.checklistMid || local.checklistMid;
       local.checklistEnd = cloudMeta.checklistEnd || local.checklistEnd;
-      local.updatedAt = cloudMeta.updatedAt;
+      local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }
   }

@@ -205,6 +205,7 @@ function onChecklistPromptSubmit(e) {
   const record = loadMonthlyLog(pending.vehicleRef, pending.year, pending.month);
   if (record) {
     results.forEach((r, i) => { record[pending.listKey][i].result = r; });
+    record.metaUpdatedAt = new Date().toISOString();
     saveMonthlyLog(record);
     syncLogMetaToCloud(record.key, buildMetaPayload(record));
   }

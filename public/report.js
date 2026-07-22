@@ -248,8 +248,8 @@ function logConflictPanelHtml(conflicts) {
       <h3>取込内容が既存データと異なります(${conflicts.length}件)</h3>
       ${conflicts.map((c, i) => {
         const label = c.type === 'day' ? `${c.day}日` : `点検(${c.label})`;
-        const localText = c.type === 'day' ? `${c.local.destination || ''} / ${c.local.driver || ''}` : c.local;
-        const importedText = c.type === 'day' ? `${c.imported.destination || ''} / ${c.imported.driver || ''}` : c.imported;
+        const localText = c.type === 'day' ? `${escapeHtml(c.local.destination || '')} / ${escapeHtml(c.local.driver || '')}` : escapeHtml(c.local);
+        const importedText = c.type === 'day' ? `${escapeHtml(c.imported.destination || '')} / ${escapeHtml(c.imported.driver || '')}` : escapeHtml(c.imported);
         return `
           <div class="conflict-row">
             <span class="conflict-label">${label}</span>
