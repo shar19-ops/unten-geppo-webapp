@@ -242,10 +242,24 @@ async function bootstrapApp() {
     history.replaceState(null, '', location.pathname);
   }
 
+  // Teams通知のリンクから開いた場合、該当の車両・年月を選択した状態で
+  // 運転月報を自動的に開く(発行者確認イベント用)。
+  const reportVehicleId = params.get('reportVehicle');
+  const reportYearParam = params.get('reportYear');
+  const reportMonthParam = params.get('reportMonth');
+  let openReportDirectly = false;
+  if (reportVehicleId && reportYearParam && reportMonthParam) {
+    reportSelectedRef = reportVehicleId;
+    reportSelectedYear = Number(reportYearParam);
+    reportSelectedMonth = Number(reportMonthParam);
+    openReportDirectly = true;
+    history.replaceState(null, '', location.pathname);
+  }
+
   // 同期待ちの間にユーザーが別タブ(運転月報など)を手動でクリックしていた場合、
   // それを上書きして運転記録入力に戻さないようにするためのガード
   if (!document.body.dataset.view) {
-    showView('trip-entry');
+    showView(openReportDirectly ? 'report' : 'trip-entry');
   }
 }
 
