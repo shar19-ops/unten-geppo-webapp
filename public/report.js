@@ -162,8 +162,8 @@ function renderReportView() {
             <col style="width: 23mm;">
           </colgroup>
           <tr>
-            <th>安全運転管理者</th>
-            <th>副安全運転管理者</th>
+            <th>安全運転<br>管理者</th>
+            <th>副安全運転<br>管理者</th>
             <th>発行者</th>
           </tr>
           <tr>
