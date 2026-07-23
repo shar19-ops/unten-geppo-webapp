@@ -155,6 +155,18 @@ function renderReportView() {
         </table>
 
         ${checklistBlock('点検日は月の末日', record.checklistEnd)}
+        <table class="report-table print-stamp-table">
+          <tr>
+            <th>安全運転管理者</th>
+            <th>副安全運転管理者</th>
+            <th>発行者</th>
+          </tr>
+          <tr>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </table>
         <p class="print-page-number">2 / 2</p>
       </div>
     </div>
