@@ -134,6 +134,8 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .conflict-row:last-of-type { border-bottom: none; }
 .conflict-label { min-width: 5rem; font-weight: 600; }
 .conflict-choice { display: flex; gap: 0.4rem; align-items: center; }
+.issuer-confirm-panel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border: 1px solid var(--accent); background: #eef4ff; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.issuer-confirm-panel p { margin: 0; }
 
 /* --- テーブル(社有車リスト) --- */
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -273,8 +275,14 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 /* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 .print-page-number { display: none; }
-.print-stamp-table { display: none; width: auto; margin-left: auto; margin-bottom: 0; table-layout: fixed; }
+.print-stamp-table { width: auto; margin-left: auto; margin-bottom: 0; table-layout: fixed; }
 .print-stamp-table td { height: 23mm; }
+/* 安全運転管理者・副安全運転管理者(1・2列目)は引き続き印刷時のみの空欄押印欄。
+   発行者列(3列目)は発行者確認の内容を常に表示するため、この2列だけを画面上で隠す。 */
+.print-stamp-table th:nth-child(1), .print-stamp-table td:nth-child(1),
+.print-stamp-table th:nth-child(2), .print-stamp-table td:nth-child(2) {
+  display: none;
+}
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
@@ -287,7 +295,10 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .report-header { font-size: 9.5pt; }
   .report-page2 { break-before: page; page-break-before: always; }
   .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.2rem; }
-  .print-stamp-table { display: table; }
+  .print-stamp-table th:nth-child(1), .print-stamp-table td:nth-child(1),
+  .print-stamp-table th:nth-child(2), .print-stamp-table td:nth-child(2) {
+    display: table-cell;
+  }
 }
 
 /* --- 管理者パスワード保護(車両リスト) --- */

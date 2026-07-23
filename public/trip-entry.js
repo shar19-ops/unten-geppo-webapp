@@ -239,11 +239,29 @@ function onChecklistPromptSubmit(e) {
     record.metaUpdatedAt = new Date().toISOString();
     saveMonthlyLog(record);
     syncLogMetaToCloud(record.key, buildMetaPayload(record));
+    if (pending.listKey === 'checklistEnd') {
+      notifyIssuerOfMonthEndChecklist(record);
+    }
   }
   tripPendingChecklists = tripPendingChecklists.slice(1);
   tripStatusMessage = '点検結果を保存しました';
   tripStatusIsError = false;
   renderTripEntryView();
+}
+
+// 月末点検の完了をTeamsへ通知する(発行者が運転月報を開いて確認できるように)。
+// 通知には運転月報への直接リンク(?reportVehicle=&reportYear=&reportMonth=)を含める。
+function notifyIssuerOfMonthEndChecklist(record) {
+  const vehicles = loadVehicles();
+  const vehicle = record.vehicleId ? vehicles.find((v) => v.id === record.vehicleId) : null;
+  const vehicleLabel = vehicle
+    ? `${vehicle.plateNumber}（${vehicle.nickname || '車種未設定'}）`
+    : (record.privateCarLabel || '車両');
+  const link = record.vehicleId
+    ? `${location.origin}${location.pathname}?reportVehicle=${encodeURIComponent(record.vehicleId)}&reportYear=${record.year}&reportMonth=${record.month}`
+    : `${location.origin}${location.pathname}`;
+  const text = `[運転管理月報] ${vehicleLabel}の${record.year}年${record.month}月分の月末点検が完了しました。内容をご確認のうえ、発行者欄への確認をお願いします。\n${link}`;
+  sendTeamsNotification(text);
 }
 
 // ---------------- 通常の運転記録入力 ----------------
