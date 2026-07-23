@@ -163,6 +163,7 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     // レコードに文言を焼き込まないことで、将来文言を直しても既存データの表示が自動的に追従する。
     checklistMid: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
     checklistEnd: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
+    issuerConfirmedAt: null,
     metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
@@ -227,6 +228,7 @@ function buildMetaPayload(record) {
     month: record.month,
     checklistMid: record.checklistMid,
     checklistEnd: record.checklistEnd,
+    issuerConfirmedAt: record.issuerConfirmedAt,
     updatedAt: record.metaUpdatedAt
   };
 }
@@ -366,6 +368,7 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
     if (cloudTime > localTime) {
       local.checklistMid = cloudMeta.checklistMid || local.checklistMid;
       local.checklistEnd = cloudMeta.checklistEnd || local.checklistEnd;
+      local.issuerConfirmedAt = cloudMeta.issuerConfirmedAt ?? local.issuerConfirmedAt;
       local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }
@@ -376,6 +379,38 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
     return local;
   }
   return null;
+}
+
+// ---------------- 発行者確認イベント(Teams通知連携) ----------------
+// Microsoft Teamsのワークフロー(Webhook)のURL。このリポジトリは公開設定のため、
+// このURLも第三者から閲覧可能な状態になるが、既存のFIREBASE_DB_URL・ADMIN_PASSWORDと
+// 同じ考え方で許容する(ユーザー確認済み)。
+const TEAMS_WEBHOOK_URL = 'https://defaultf7665abfef6f4427bda03700cd1928.70.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/25/workflows/8e6b8aa3a4e24d6b98db15901c7b1cdd/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=JiF36FqrgyE5Rzw1FyMQz5zxHz52wCN-zOAuSEJNzd4';
+
+// 送信結果を待たない一回きりのfire-and-forget通知。失敗してもリトライしない
+// (失敗しても運転月報画面の確認バナーが引き続き案内役になるため)。
+function sendTeamsNotification(text) {
+  fetch(TEAMS_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  }).catch(() => {});
+}
+
+// フルネーム(姓　名、全角/半角スペース区切り)から姓だけを取り出す。
+// スペースが無ければ文字列全体をそのまま返す。
+function surnameOf(fullName) {
+  const trimmed = String(fullName ?? '').trim();
+  if (!trimmed) return '';
+  return trimmed.split(/[\s　]+/)[0];
+}
+
+// ISO日時文字列を「yy/m/d」形式(例: 26/7/31)に整形する。
+function formatShortDate(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${yy}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 // ---------------- 日常点検イベント(15日・月末点検) ----------------
