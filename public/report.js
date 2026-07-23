@@ -156,6 +156,11 @@ function renderReportView() {
 
         ${checklistBlock('点検日は月の末日', record.checklistEnd)}
         <table class="report-table print-stamp-table">
+          <colgroup>
+            <col style="width: 23mm;">
+            <col style="width: 23mm;">
+            <col style="width: 23mm;">
+          </colgroup>
           <tr>
             <th>安全運転管理者</th>
             <th>副安全運転管理者</th>

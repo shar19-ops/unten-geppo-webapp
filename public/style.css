@@ -273,8 +273,8 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 /* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 .print-page-number { display: none; }
-.print-stamp-table { display: none; }
-.print-stamp-table td { height: 3rem; }
+.print-stamp-table { display: none; width: auto; margin-left: auto; margin-bottom: 0; table-layout: fixed; }
+.print-stamp-table td { height: 1.5rem; }
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
@@ -285,7 +285,7 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .report-table { font-size: 9.5pt; }
   .report-header { font-size: 9.5pt; }
   .report-page2 { break-before: page; page-break-before: always; }
-  .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.5rem; }
+  .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.2rem; }
   .print-stamp-table { display: table; }
 }
 
