@@ -274,7 +274,7 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 .print-page-number { display: none; }
 .print-stamp-table { display: none; width: auto; margin-left: auto; margin-bottom: 0; table-layout: fixed; }
-.print-stamp-table td { height: 1.5rem; }
+.print-stamp-table td { height: 23mm; }
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
@@ -283,6 +283,7 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .view.active { display: block; }
   .report-sheet { border: none; padding: 0; }
   .report-table { font-size: 9.5pt; }
+  .report-table th, .report-table td { padding: 0.15rem 0.4rem; }
   .report-header { font-size: 9.5pt; }
   .report-page2 { break-before: page; page-break-before: always; }
   .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.2rem; }
