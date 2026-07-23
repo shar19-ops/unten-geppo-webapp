@@ -127,6 +127,12 @@ function renderReportView() {
         </div>
       </div>
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
+      ${(!record.issuerConfirmedAt && isChecklistComplete(record.checklistEnd)) ? `
+        <div class="issuer-confirm-panel no-print">
+          <p>月末点検が完了しました。内容をご確認のうえ、発行者欄にご記入ください。</p>
+          <button class="btn btn-primary" type="button" id="issuerConfirmBtn">確認しました</button>
+        </div>
+      ` : ''}
       ${reportImportConflicts ? logConflictPanelHtml(reportImportConflicts.conflicts) : ''}
     </div>
 
@@ -169,7 +175,7 @@ function renderReportView() {
           <tr>
             <td></td>
             <td></td>
-            <td></td>
+            <td>${record.issuerConfirmedAt ? `${escapeHtml(formatShortDate(record.issuerConfirmedAt))}<br>${escapeHtml(surnameOf(vehicleManager))}` : ''}</td>
           </tr>
         </table>
         <p class="print-page-number">2 / 2</p>
@@ -192,6 +198,16 @@ function renderReportView() {
     renderReportView();
   });
   document.getElementById('reportPrintBtn').addEventListener('click', () => window.print());
+  const issuerConfirmBtnEl = document.getElementById('issuerConfirmBtn');
+  if (issuerConfirmBtnEl) {
+    issuerConfirmBtnEl.addEventListener('click', () => {
+      record.issuerConfirmedAt = new Date().toISOString();
+      record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      renderReportView();
+    });
+  }
   document.getElementById('xlsxExportBtn').addEventListener('click', async () => {
     reportStatusMessage = '出力しています…';
     reportStatusIsError = false;
