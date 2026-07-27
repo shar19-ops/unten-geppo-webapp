@@ -477,62 +477,9 @@ async function saveBlobToFile(blob, filename) {
   return filename;
 }
 
-async function exportMonthlyLogToFile(record, vehicleLabel, submitterName) {
-  const label = sanitizeFilename(vehicleLabel || record.privateCarLabel || record.vehicleId || '車両');
-  const ym = `${record.year}${String(record.month).padStart(2, '0')}`;
-  const filename = `${label}_運転月報_${ym}_${todayIso()}_${sanitizeFilename(submitterName || '')}.json`;
-  return saveBlobToFile(new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' }), filename);
-}
-
-async function exportVehiclesToFile() {
-  const filename = `車両リスト_${todayIso()}.json`;
-  return saveBlobToFile(new Blob([JSON.stringify(loadVehicles(), null, 2)], { type: 'application/json' }), filename);
-}
-
-async function readJsonFile(file) {
-  const text = await file.text();
-  return JSON.parse(text);
-}
-
 // ---------------- マージ(複数端末からの取り込み) ----------------
 function dayHasData(day) {
   return !!day && (day.meterReading != null || day.destination || day.driver || day.alcoholCheck != null || day.fuelAdded != null);
-}
-
-// マージ単位は日(day)。ローカルが空の日は取り込んだ値を採用、取り込み側が空の日はローカルを維持、
-// 両方に値がありかつ内容が異なる日は自動上書きせず競合として返す(呼び出し側が画面上で解決する)。
-function mergeMonthlyLog(local, imported) {
-  if (!local) return { merged: imported, conflicts: [] };
-  if (!imported) return { merged: local, conflicts: [] };
-
-  const merged = JSON.parse(JSON.stringify(local));
-  const conflicts = [];
-
-  for (let d = 1; d <= 31; d++) {
-    const l = local.days && local.days[d];
-    const im = imported.days && imported.days[d];
-    const lHas = dayHasData(l);
-    const imHas = dayHasData(im);
-    if (!lHas && imHas) {
-      merged.days[d] = im;
-    } else if (lHas && imHas && JSON.stringify({ ...l, updatedAt: null, updatedBy: null }) !== JSON.stringify({ ...im, updatedAt: null, updatedBy: null })) {
-      conflicts.push({ type: 'day', day: d, local: l, imported: im });
-    }
-  }
-
-  ['checklistMid', 'checklistEnd'].forEach((listKey) => {
-    (local[listKey] || []).forEach((item, i) => {
-      const impItem = imported[listKey] && imported[listKey][i];
-      if (!impItem) return;
-      if (item.result == null && impItem.result != null) {
-        merged[listKey][i].result = impItem.result;
-      } else if (item.result != null && impItem.result != null && item.result !== impItem.result) {
-        conflicts.push({ type: 'checklist', listKey, index: i, label: FIXED_CHECKLIST_ITEMS[i], local: item.result, imported: impItem.result });
-      }
-    });
-  });
-
-  return { merged, conflicts };
 }
 
 // マージ単位は車両番号(plateNumber)+車両タイプ(vehicleType)。新規車両は追加、

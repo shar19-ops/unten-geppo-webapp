@@ -175,6 +175,7 @@ function confirmAdminPassword() {
     closeAdminPwOverlay();
     setVehiclesTabVisible(true);
     document.getElementById('adminModeCheck').checked = true;
+    if (document.body.dataset.view === 'report') renderReportView();
   } else {
     document.getElementById('adminPwError').textContent = 'パスワードが違います';
     input.value = '';
@@ -186,6 +187,7 @@ document.getElementById('adminModeCheck').addEventListener('change', (e) => {
   if (e.target.checked) {
     if (isAdminUnlocked()) {
       setVehiclesTabVisible(true);
+      if (document.body.dataset.view === 'report') renderReportView();
       return;
     }
     e.target.checked = false;
@@ -193,6 +195,7 @@ document.getElementById('adminModeCheck').addEventListener('change', (e) => {
   } else {
     sessionStorage.removeItem(ADMIN_UNLOCK_KEY);
     setVehiclesTabVisible(false);
+    if (document.body.dataset.view === 'report') renderReportView();
   }
 });
 document.getElementById('adminPwConfirmBtn').addEventListener('click', confirmAdminPassword);
