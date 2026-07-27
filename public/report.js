@@ -1,11 +1,10 @@
-// 運転月報画面。データはstorage.js経由(loadMonthlyLog/saveMonthlyLog/mergeMonthlyLog)。
+// 運転月報画面。データはstorage.js経由(loadMonthlyLog/saveMonthlyLog)。
 
 let reportSelectedRef = null;
 let reportSelectedYear = null;
 let reportSelectedMonth = null;
 let reportStatusMessage = '';
 let reportStatusIsError = false;
-let reportImportConflicts = null; // {merged, conflicts}
 let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
 
 function reportVehicleOptions() {
@@ -107,11 +106,10 @@ function renderReportView() {
           <select class="input-sm" id="reportMonthSelect">
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === reportSelectedYear && m.month === reportSelectedMonth ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
           </select>
-          <input type="file" id="reportJsonInput" accept=".json" hidden>
-          <button class="btn btn-ghost" type="button" id="reportJsonImportBtn">JSONから取込</button>
-          <button class="btn btn-ghost" type="button" id="reportJsonExportBtn">JSONへ出力</button>
-          <button class="btn btn-ghost" type="button" id="reportPrintBtn">印刷／PDF</button>
-          <button class="btn btn-primary" type="button" id="xlsxExportBtn">Excelとして出力</button>
+          ${isAdminUnlocked() ? `
+            <button class="btn btn-ghost" type="button" id="reportPrintBtn">印刷／PDF</button>
+            <button class="btn btn-primary" type="button" id="xlsxExportBtn">Excelとして出力</button>
+          ` : ''}
         </div>
       </div>
       <div class="inline-form">
@@ -133,7 +131,6 @@ function renderReportView() {
           <button class="btn btn-primary" type="button" id="issuerConfirmBtn">確認しました</button>
         </div>
       ` : ''}
-      ${reportImportConflicts ? logConflictPanelHtml(reportImportConflicts.conflicts) : ''}
     </div>
 
     <div class="report-sheet">
@@ -187,17 +184,16 @@ function renderReportView() {
   if (reportVehicleSelectEl) {
     reportVehicleSelectEl.addEventListener('change', (e) => {
       reportSelectedRef = e.target.value;
-      reportImportConflicts = null;
       renderReportView();
     });
   }
   document.getElementById('reportMonthSelect').addEventListener('change', (e) => {
     const [y, m] = e.target.value.split('-').map(Number);
     reportSelectedYear = y; reportSelectedMonth = m;
-    reportImportConflicts = null;
     renderReportView();
   });
-  document.getElementById('reportPrintBtn').addEventListener('click', () => window.print());
+  const reportPrintBtnEl = document.getElementById('reportPrintBtn');
+  if (reportPrintBtnEl) reportPrintBtnEl.addEventListener('click', () => window.print());
   const issuerConfirmBtnEl = document.getElementById('issuerConfirmBtn');
   if (issuerConfirmBtnEl) {
     issuerConfirmBtnEl.addEventListener('click', () => {
@@ -208,116 +204,25 @@ function renderReportView() {
       renderReportView();
     });
   }
-  document.getElementById('xlsxExportBtn').addEventListener('click', async () => {
-    reportStatusMessage = '出力しています…';
-    reportStatusIsError = false;
-    renderReportView();
-    try {
-      await loadScriptOnce('vendor/exceljs/exceljs.min.js');
-      const vehicleLabel = selectedOption.vehicleId ? (vehicle || {}).plateNumber : record.privateCarLabel;
-      await exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleManager);
-      reportStatusMessage = 'Excelファイルを出力しました';
+  const xlsxExportBtnEl = document.getElementById('xlsxExportBtn');
+  if (xlsxExportBtnEl) {
+    xlsxExportBtnEl.addEventListener('click', async () => {
+      reportStatusMessage = '出力しています…';
       reportStatusIsError = false;
-    } catch (err) {
-      reportStatusMessage = 'Excel出力に失敗しました: ' + err.message;
-      reportStatusIsError = true;
-    }
-    renderReportView();
-  });
-  document.getElementById('reportJsonExportBtn').addEventListener('click', async () => {
-    const vehicleLabel = selectedOption.vehicleId ? (vehicle || {}).plateNumber : record.privateCarLabel;
-    const filename = await exportMonthlyLogToFile(record, vehicleLabel);
-    reportStatusMessage = filename ? `書き出しました(${filename})` : '';
-    reportStatusIsError = false;
-    renderReportView();
-  });
-  document.getElementById('reportJsonImportBtn').addEventListener('click', () => document.getElementById('reportJsonInput').click());
-  document.getElementById('reportJsonInput').addEventListener('change', onReportJsonSelected);
-
-  if (reportImportConflicts) {
-    document.getElementById('logConflictApplyBtn').addEventListener('click', applyLogConflictResolution);
-    document.getElementById('logConflictCancelBtn').addEventListener('click', () => {
-      reportImportConflicts = null;
-      reportStatusMessage = '取込を取り消しました';
-      reportStatusIsError = false;
+      renderReportView();
+      try {
+        await loadScriptOnce('vendor/exceljs/exceljs.min.js');
+        const vehicleLabel = selectedOption.vehicleId ? (vehicle || {}).plateNumber : record.privateCarLabel;
+        await exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleManager);
+        reportStatusMessage = 'Excelファイルを出力しました';
+        reportStatusIsError = false;
+      } catch (err) {
+        reportStatusMessage = 'Excel出力に失敗しました: ' + err.message;
+        reportStatusIsError = true;
+      }
       renderReportView();
     });
   }
-}
-
-async function onReportJsonSelected(e) {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  try {
-    const imported = await readJsonFile(file);
-    if (!imported || typeof imported !== 'object' || !imported.days || !imported.year || !imported.month) {
-      throw new Error('運転月報のデータファイルではないようです');
-    }
-    const importedRef = vehicleRefFor(imported.vehicleId, imported.privateCarLabel);
-    reportSelectedRef = importedRef;
-    reportSelectedYear = imported.year;
-    reportSelectedMonth = imported.month;
-    const local = loadMonthlyLog(importedRef, imported.year, imported.month);
-    const { merged, conflicts } = mergeMonthlyLog(local, imported);
-    if (conflicts.length) {
-      reportImportConflicts = { merged, conflicts };
-      reportStatusMessage = `${conflicts.length}件の日で内容の食い違いがあります。下で選んで適用してください。`;
-      reportStatusIsError = true;
-    } else {
-      saveMonthlyLog(merged);
-      reportStatusMessage = '取込内容を反映しました';
-      reportStatusIsError = false;
-    }
-    renderReportView();
-  } catch (err) {
-    reportStatusMessage = 'JSONファイルを読み込めませんでした: ' + err.message;
-    reportStatusIsError = true;
-    renderReportView();
-  }
-}
-
-function logConflictPanelHtml(conflicts) {
-  return `
-    <div class="conflict-panel">
-      <h3>取込内容が既存データと異なります(${conflicts.length}件)</h3>
-      ${conflicts.map((c, i) => {
-        const label = c.type === 'day' ? `${c.day}日` : `点検(${c.label})`;
-        const localText = c.type === 'day' ? `${escapeHtml(c.local.destination || '')} / ${escapeHtml(c.local.driver || '')}` : escapeHtml(c.local);
-        const importedText = c.type === 'day' ? `${escapeHtml(c.imported.destination || '')} / ${escapeHtml(c.imported.driver || '')}` : escapeHtml(c.imported);
-        return `
-          <div class="conflict-row">
-            <span class="conflict-label">${label}</span>
-            <span>この端末: ${localText}</span>
-            <span>取込データ: ${importedText}</span>
-            <span class="conflict-choice">
-              <label><input type="radio" name="log-conflict-${i}" value="local" checked> この端末を残す</label>
-              <label><input type="radio" name="log-conflict-${i}" value="imported"> 取込データで更新</label>
-            </span>
-          </div>
-        `;
-      }).join('')}
-      <div class="form-actions" style="margin-top:0.75rem;">
-        <button class="btn btn-primary" type="button" id="logConflictApplyBtn">選択内容を適用</button>
-        <button class="btn btn-ghost" type="button" id="logConflictCancelBtn">取込を取り消す</button>
-      </div>
-    </div>
-  `;
-}
-
-function applyLogConflictResolution() {
-  const { merged, conflicts } = reportImportConflicts;
-  conflicts.forEach((c, i) => {
-    const choice = document.querySelector(`input[name="log-conflict-${i}"]:checked`).value;
-    if (choice !== 'imported') return;
-    if (c.type === 'day') merged.days[c.day] = c.imported;
-    else merged[c.listKey][c.index].result = c.imported;
-  });
-  saveMonthlyLog(merged);
-  reportImportConflicts = null;
-  reportStatusMessage = '取込内容を適用しました';
-  reportStatusIsError = false;
-  renderReportView();
 }
 
 function reportBlock(days, startDay, endDay, year, month, holidays) {

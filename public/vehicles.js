@@ -21,11 +21,8 @@ function renderVehiclesView() {
         <h2>車両リスト</h2>
         <div class="panel-actions">
           <input type="file" id="vehicleExcelInput" accept=".xlsx,.xls" hidden>
-          <input type="file" id="vehicleJsonInput" accept=".json" hidden>
           <button class="btn btn-ghost" type="button" id="vehicleExcelImportBtn">Excelから取込</button>
           <button class="btn btn-ghost" type="button" id="vehicleExcelExportBtn">Excelへ出力</button>
-          <button class="btn btn-ghost" type="button" id="vehicleJsonImportBtn">JSONから取込</button>
-          <button class="btn btn-ghost" type="button" id="vehicleJsonExportBtn">JSONへ出力</button>
           <button class="btn btn-primary" type="button" id="vehicleAddBtn">＋ ${tabLabel}を追加</button>
         </div>
       </div>
@@ -80,13 +77,7 @@ function renderVehiclesView() {
     await loadScriptOnce('vendor/sheetjs/xlsx.full.min.js');
     exportVehiclesToExcel();
   });
-  document.getElementById('vehicleJsonImportBtn').addEventListener('click', () => document.getElementById('vehicleJsonInput').click());
-  document.getElementById('vehicleJsonExportBtn').addEventListener('click', async () => {
-    const filename = await exportVehiclesToFile();
-    setVehicleStatus(filename ? `書き出しました(${filename})` : '', false);
-  });
   document.getElementById('vehicleExcelInput').addEventListener('change', onVehicleExcelSelected);
-  document.getElementById('vehicleJsonInput').addEventListener('change', onVehicleJsonSelected);
 
   root.querySelectorAll('.vehicle-qr-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -133,6 +124,15 @@ function renderVehiclesView() {
   }
 
   if (vehicleQrState) {
+    document.getElementById('qrCopyUrlBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(vehicleQrState.url);
+        setVehicleStatus('URLをコピーしました', false);
+      } catch {
+        setVehicleStatus('コピーできませんでした。手動で選択してコピーしてください', true);
+      }
+      renderVehiclesView();
+    });
     document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
     document.getElementById('qrCloseBtn').addEventListener('click', () => {
       vehicleQrState = null;
@@ -180,6 +180,7 @@ function qrPanelHtml(state) {
       <div class="panel-head no-print">
         <h2>QRコード: ${escapeHtml(vehicle.plateNumber)}</h2>
         <div class="panel-actions">
+          <button class="btn btn-ghost" type="button" id="qrCopyUrlBtn">URLをコピー</button>
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
         </div>
@@ -331,20 +332,6 @@ function exportVehiclesToExcel() {
   XLSX.writeFile(wb, `${sheetName}_${todayIso()}.xlsx`);
   setVehicleStatus('Excelへ出力しました', false);
   renderVehiclesView();
-}
-
-async function onVehicleJsonSelected(e) {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  try {
-    const data = await readJsonFile(file);
-    if (!Array.isArray(data)) throw new Error('車両リストのJSONファイルではないようです');
-    await applyVehicleImport(data, `JSONから${data.length}件読み込みました`);
-  } catch (err) {
-    setVehicleStatus('JSONファイルを読み込めませんでした: ' + err.message, true);
-    renderVehiclesView();
-  }
 }
 
 async function applyVehicleImport(importedList, successMessage) {
