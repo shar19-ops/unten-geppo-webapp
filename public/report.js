@@ -8,6 +8,7 @@ let reportStatusIsError = false;
 let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
 let reportNextMonthSyncedKey = null; // 直近でクラウド同期を試みた翌月分の月報キー(月末走行距離の自動計算用)
 let reportAlcoholErrorCells = new Set(); // "day:field" 形式。提出時のアルコールチェック未入力バリデーションで使う
+let reportSafetyManagerNameDraft = ''; // 安全運転管理者名の入力途中の値を再描画間で保持する
 
 // 始業前・終業後のどちらか一方だけ入力されている日を探す(両方入力済み・両方未入力は対象外)。
 function findAlcoholErrorCells(record) {
@@ -166,6 +167,19 @@ function renderReportView() {
           <button class="btn btn-primary" type="button" id="issuerConfirmBtn">提出</button>
         </div>
       ` : ''}
+      ${(isAdminUnlocked() && record.issuerConfirmedAt && !record.safetyManagerConfirmedAt) ? `
+        <div class="safety-confirm-panel no-print">
+          <p>車両管理者による提出が完了しました。内容をご確認のうえ、承認または差し戻しをしてください。</p>
+          <div class="field">
+            <label>安全運転管理者名</label>
+            <input type="text" class="input-lg" id="safetyManagerNameInput" placeholder="氏名を入力してください" value="${escapeHtml(reportSafetyManagerNameDraft)}">
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="button" id="safetyConfirmBtn">確認</button>
+            <button class="btn btn-danger" type="button" id="safetyRejectBtn">差戻し</button>
+          </div>
+        </div>
+      ` : ''}
     </div>
 
     <div class="report-sheet">
@@ -205,7 +219,7 @@ function renderReportView() {
             <th>発行者</th>
           </tr>
           <tr>
-            <td></td>
+            <td>${record.safetyManagerConfirmedAt ? `${escapeHtml(formatShortDate(record.safetyManagerConfirmedAt))}<br>${escapeHtml(record.safetyManagerName || '')}` : ''}</td>
             <td></td>
             <td>${record.issuerConfirmedAt ? `${escapeHtml(formatShortDate(record.issuerConfirmedAt))}<br>${escapeHtml(surnameOf(vehicleManager))}` : ''}</td>
           </tr>
@@ -220,6 +234,7 @@ function renderReportView() {
     reportVehicleSelectEl.addEventListener('change', (e) => {
       reportSelectedRef = e.target.value;
       reportAlcoholErrorCells = new Set();
+      reportSafetyManagerNameDraft = '';
       renderReportView();
     });
   }
@@ -227,6 +242,7 @@ function renderReportView() {
     const [y, m] = e.target.value.split('-').map(Number);
     reportSelectedYear = y; reportSelectedMonth = m;
     reportAlcoholErrorCells = new Set();
+    reportSafetyManagerNameDraft = '';
     renderReportView();
   });
   const reportPrintBtnEl = document.getElementById('reportPrintBtn');
@@ -247,6 +263,55 @@ function renderReportView() {
       reportStatusIsError = false;
       record.issuerConfirmedAt = new Date().toISOString();
       record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      renderReportView();
+    });
+  }
+
+  const safetyManagerNameInputEl = document.getElementById('safetyManagerNameInput');
+  if (safetyManagerNameInputEl) {
+    safetyManagerNameInputEl.addEventListener('input', (e) => {
+      reportSafetyManagerNameDraft = e.target.value;
+    });
+  }
+
+  const safetyConfirmBtnEl = document.getElementById('safetyConfirmBtn');
+  if (safetyConfirmBtnEl) {
+    safetyConfirmBtnEl.addEventListener('click', () => {
+      const name = reportSafetyManagerNameDraft.trim();
+      if (!name) {
+        reportStatusMessage = '安全運転管理者名を入力してください';
+        reportStatusIsError = true;
+        renderReportView();
+        return;
+      }
+      record.safetyManagerConfirmedAt = new Date().toISOString();
+      record.safetyManagerName = name;
+      record.metaUpdatedAt = new Date().toISOString();
+      reportSafetyManagerNameDraft = '';
+      reportStatusMessage = '';
+      reportStatusIsError = false;
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      renderReportView();
+    });
+  }
+
+  const safetyRejectBtnEl = document.getElementById('safetyRejectBtn');
+  if (safetyRejectBtnEl) {
+    safetyRejectBtnEl.addEventListener('click', () => {
+      if (!confirm('差し戻します。車両管理者は再度「提出」が必要になります。よろしいですか?')) return;
+      const subject = '運転月報の再提出依頼';
+      const body = '運転月報の提出ありがとうございます。\n' +
+        '提出いただきました運転月報ですが、内容に不備がありますので、見直しをして再提出をお願いいたします。\n' +
+        '安全品質保証部';
+      location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+      record.issuerConfirmedAt = ''; // nullにするとFirebase側でキーごと消えてしまい、他端末の
+      // 古い確定値を上書きできなくなるため空文字を使う(storage.jsのcreateEmptyMonthlyLog参照)
+      record.metaUpdatedAt = new Date().toISOString();
+      reportSafetyManagerNameDraft = '';
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
       renderReportView();
