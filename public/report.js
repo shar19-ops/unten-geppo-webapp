@@ -92,6 +92,10 @@ function renderReportView() {
   const nextMonthRecord = loadMonthlyLog(reportSelectedRef, nextYear, nextMonth);
   const nextMonthDays = nextMonthRecord ? nextMonthRecord.days : {};
 
+  // 発行者確認バナーは「翌月の運転記録が1件でも保存されたか」だけで判定する
+  // (月末点検の完了状況は見ない)。
+  const nextMonthHasEntry = Object.values(nextMonthDays).some((d) => dayHasData(d));
+
   const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
   const holidays = computeJapaneseHolidays(record.year);
   // 事業所名・車両管理者は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
@@ -131,7 +135,7 @@ function renderReportView() {
         </div>
       </div>
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
-      ${(!record.issuerConfirmedAt && isChecklistComplete(record.checklistEnd)) ? `
+      ${(!record.issuerConfirmedAt && nextMonthHasEntry) ? `
         <div class="issuer-confirm-panel no-print">
           <p>月末点検が完了しました。内容をご確認のうえ、発行者欄にご記入ください。</p>
           <button class="btn btn-primary" type="button" id="issuerConfirmBtn">確認しました</button>
@@ -225,7 +229,8 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
         <td class="num-cell distance-cell">${distance !== '' ? distance.toLocaleString() : ''}</td>
         <td class="dest-cell">${escapeHtml(day.destination || '')}</td>
         <td class="driver-cell">${escapeHtml(day.driver || '')}</td>
-        <td class="num-cell">${day.alcoholCheck != null ? day.alcoholCheck : ''}</td>
+        <td class="num-cell">${day.alcoholCheckBefore != null ? day.alcoholCheckBefore : ''}</td>
+        <td class="num-cell">${day.alcoholCheckAfter != null ? day.alcoholCheckAfter : ''}</td>
         <td class="num-cell">${day.fuelAdded != null ? day.fuelAdded.toFixed(2) : ''}</td>
       </tr>
     `);
@@ -239,7 +244,8 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
           <th class="distance-cell">走行距離<br>km</th>
           <th class="dest-cell">行先</th>
           <th>運転者</th>
-          <th>ｱﾙｺｰﾙCK<br>㎎/ℓ</th>
+          <th>ｱﾙｺｰﾙCK<br>始業前</th>
+          <th>ｱﾙｺｰﾙCK<br>終業後</th>
           <th>給油<br>ℓ</th>
         </tr>
       </thead>

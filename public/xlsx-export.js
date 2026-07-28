@@ -32,7 +32,9 @@ async function exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleM
     ws.getCell(`B${row}`).value = day.meterReading != null ? day.meterReading : null;
     ws.getCell(`H${row}`).value = day.destination || '';
     ws.getCell(`L${row}`).value = day.driver || '';
-    ws.getCell(`N${row}`).value = day.alcoholCheck != null ? day.alcoholCheck : null;
+    // 雛形の列は1列のみのため、終業後分は出力されない(呼び出し元の「Excelとして出力」
+    // ボタンは既に削除済みでこの関数自体は現状UIから未到達)。
+    ws.getCell(`N${row}`).value = day.alcoholCheckBefore != null ? day.alcoholCheckBefore : null;
     ws.getCell(`O${row}`).value = day.fuelAdded != null ? day.fuelAdded : null;
   }
 
