@@ -40,13 +40,24 @@ async function showView(name) {
 // 休日等で翌日以降のメーター指針が未入力の場合は、月末(31日)までの間で
 // 次に記録されている日まで遡って差分を取る(間の空欄日はスキップする)。
 // 記録されている日が月末までに無い場合、または対象日自体が未入力の場合は空欄。
-function computeDistance(days, day) {
+// ただし月の最終日(lastDayOfMonth)だけは、同月内に次の記録が無ければ
+// 翌月分(nextMonthDays)から同じロジックで次の記録を探す(year/month/nextMonthDaysが
+// 渡された場合のみ。月末以外の日には影響しない)。
+function computeDistance(days, day, year, month, nextMonthDays) {
   const cur = days[day];
   if (!cur || cur.meterReading == null) return '';
   for (let d = day + 1; d <= 31; d++) {
     const next = days[d];
     if (next && next.meterReading != null) {
       return next.meterReading - cur.meterReading;
+    }
+  }
+  if (nextMonthDays && year != null && month != null && day === lastDayOfMonth(year, month)) {
+    for (let d = 1; d <= 31; d++) {
+      const next = nextMonthDays[d];
+      if (next && next.meterReading != null) {
+        return next.meterReading - cur.meterReading;
+      }
     }
   }
   return '';
@@ -124,11 +135,11 @@ function dayColorClass(year, month, day, holidays) {
   return '';
 }
 
-function computeTotals(days) {
+function computeTotals(days, year, month, nextMonthDays) {
   let totalDistance = 0;
   let totalFuel = 0;
   for (let d = 1; d <= 31; d++) {
-    const dist = computeDistance(days, d);
+    const dist = computeDistance(days, d, year, month, nextMonthDays);
     if (typeof dist === 'number') totalDistance += dist;
     const fuel = days[d] && days[d].fuelAdded;
     if (typeof fuel === 'number') totalFuel += fuel;
