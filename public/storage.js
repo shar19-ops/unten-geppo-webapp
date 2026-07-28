@@ -151,7 +151,7 @@ function loadMonthlyLog(vehicleRef, year, month) {
 function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
   const days = {};
   for (let d = 1; d <= 31; d++) {
-    days[d] = { meterReading: null, destination: '', driver: '', alcoholCheck: null, fuelAdded: null, updatedAt: null, updatedBy: null };
+    days[d] = { meterReading: null, destination: '', driver: '', alcoholCheckBefore: null, alcoholCheckAfter: null, fuelAdded: null, updatedAt: null, updatedBy: null };
   }
   return {
     key: monthlyLogKey(vehicleRef, year, month),
@@ -387,9 +387,13 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
 // 同じ考え方で許容する(ユーザー確認済み)。
 const TEAMS_WEBHOOK_URL = 'https://defaultf7665abfef6f4427bda03700cd1928.70.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/25/workflows/8e6b8aa3a4e24d6b98db15901c7b1cdd/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=JiF36FqrgyE5Rzw1FyMQz5zxHz52wCN-zOAuSEJNzd4';
 
+// 一時停止中(再開する場合はtrueに戻す)。Webhook設定自体は変更していない。
+const TEAMS_NOTIFICATIONS_ENABLED = false;
+
 // 送信結果を待たない一回きりのfire-and-forget通知。失敗してもリトライしない
 // (失敗しても運転月報画面の確認バナーが引き続き案内役になるため)。
 function sendTeamsNotification(text) {
+  if (!TEAMS_NOTIFICATIONS_ENABLED) return;
   fetch(TEAMS_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -479,7 +483,7 @@ async function saveBlobToFile(blob, filename) {
 
 // ---------------- マージ(複数端末からの取り込み) ----------------
 function dayHasData(day) {
-  return !!day && (day.meterReading != null || day.destination || day.driver || day.alcoholCheck != null || day.fuelAdded != null);
+  return !!day && (day.meterReading != null || day.destination || day.driver || day.alcoholCheckBefore != null || day.alcoholCheckAfter != null || day.fuelAdded != null);
 }
 
 // マージ単位は車両番号(plateNumber)+車両タイプ(vehicleType)。新規車両は追加、

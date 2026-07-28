@@ -158,8 +158,13 @@ function tripFormHtml() {
       </div>
 
       <div class="field">
-        <label>アルコールチェック(mg/L)</label>
-        <input type="text" name="alcoholCheck" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheck != null ? escapeHtml(existingDay.alcoholCheck) : ''}">
+        <label>アルコールチェック(始業前・mg/L)</label>
+        <input type="text" name="alcoholCheckBefore" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheckBefore != null ? escapeHtml(existingDay.alcoholCheckBefore) : ''}">
+      </div>
+
+      <div class="field">
+        <label>アルコールチェック(終業後・mg/L)</label>
+        <input type="text" name="alcoholCheckAfter" inputmode="decimal" class="input-lg" placeholder="0" value="${existingDay && existingDay.alcoholCheckAfter != null ? escapeHtml(existingDay.alcoholCheckAfter) : ''}">
       </div>
 
       <button type="submit" class="btn btn-primary btn-block" ${(tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length) ? 'disabled' : ''}>この記録を保存</button>
@@ -310,10 +315,12 @@ function onTripEntrySubmit(e) {
     meterReading: parseNumberOrNull(fd.get('meterReading')),
     destination: String(fd.get('destination') || '').trim(),
     driver,
-    alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck'))
+    alcoholCheckBefore: parseNumberOrNull(fd.get('alcoholCheckBefore')),
+    alcoholCheckAfter: parseNumberOrNull(fd.get('alcoholCheckAfter'))
   };
 
-  if (dayData.alcoholCheck != null && dayData.alcoholCheck >= 0.15) {
+  const isOverAlcoholLimit = (v) => v != null && v >= 0.15;
+  if (isOverAlcoholLimit(dayData.alcoholCheckBefore) || isOverAlcoholLimit(dayData.alcoholCheckAfter)) {
     alert('酒気帯びです。運転は中止してください！');
   }
 
