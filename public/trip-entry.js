@@ -242,6 +242,13 @@ function onChecklistPromptSubmit(e) {
     if (pending.listKey === 'checklistEnd') {
       notifyIssuerOfMonthEndChecklist(record);
     }
+    if (results.includes('×')) {
+      const vehicle = record.vehicleId ? loadVehicles().find((v) => v.id === record.vehicleId) : null;
+      const isPrivate = vehicle ? vehicle.vehicleType === 'private' : false;
+      alert(isPrivate
+        ? '適切な処置または整備工場などに持込み修理を行なってください。'
+        : '適切な処置または、自動車修理依頼書を発行してください。');
+    }
   }
   tripPendingChecklists = tripPendingChecklists.slice(1);
   tripStatusMessage = '点検結果を保存しました';
@@ -305,6 +312,10 @@ function onTripEntrySubmit(e) {
     driver,
     alcoholCheck: parseNumberOrNull(fd.get('alcoholCheck'))
   };
+
+  if (dayData.alcoholCheck != null && dayData.alcoholCheck >= 0.15) {
+    alert('酒気帯びです。運転は中止してください！');
+  }
 
   const savedRecord = saveTripDay(vehicleRef, year, month, day, dayData, { vehicleId, privateCarLabel, updatedBy: driver });
   syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);

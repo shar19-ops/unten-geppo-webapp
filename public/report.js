@@ -85,7 +85,14 @@ function renderReportView() {
     });
   }
 
-  const totals = computeTotals(record.days);
+  // 月末日の走行距離は翌月最初の記録から計算するため、翌月分をローカルにあれば読み込んでおく
+  // (この画面の主目的ではないためクラウド同期はしない)。
+  const nextMonth = record.month === 12 ? 1 : record.month + 1;
+  const nextYear = record.month === 12 ? record.year + 1 : record.year;
+  const nextMonthRecord = loadMonthlyLog(reportSelectedRef, nextYear, nextMonth);
+  const nextMonthDays = nextMonthRecord ? nextMonthRecord.days : {};
+
+  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
   const holidays = computeJapaneseHolidays(record.year);
   // 事業所名・車両管理者は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
   const vehicle = selectedOption.vehicleId ? loadVehicles().find((v) => v.id === selectedOption.vehicleId) : null;
@@ -107,8 +114,7 @@ function renderReportView() {
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === reportSelectedYear && m.month === reportSelectedMonth ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
           </select>
           ${isAdminUnlocked() ? `
-            <button class="btn btn-ghost" type="button" id="reportPrintBtn">印刷／PDF</button>
-            <button class="btn btn-primary" type="button" id="xlsxExportBtn">Excelとして出力</button>
+            <button class="btn btn-primary" type="button" id="reportPrintBtn">印刷／PDF</button>
           ` : ''}
         </div>
       </div>
@@ -143,11 +149,11 @@ function renderReportView() {
         </div>
       </div>
 
-      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays)}
+      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays)}
       ${checklistBlock('点検日15日', record.checklistMid)}
       <p class="print-page-number">1 / 2</p>
       <div class="report-page2">
-        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays)}
+        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays)}
 
         <table class="report-table totals-table">
           <tr>
@@ -204,32 +210,13 @@ function renderReportView() {
       renderReportView();
     });
   }
-  const xlsxExportBtnEl = document.getElementById('xlsxExportBtn');
-  if (xlsxExportBtnEl) {
-    xlsxExportBtnEl.addEventListener('click', async () => {
-      reportStatusMessage = '出力しています…';
-      reportStatusIsError = false;
-      renderReportView();
-      try {
-        await loadScriptOnce('vendor/exceljs/exceljs.min.js');
-        const vehicleLabel = selectedOption.vehicleId ? (vehicle || {}).plateNumber : record.privateCarLabel;
-        await exportMonthlyLogToXlsx(record, vehicleLabel, officeName, vehicleManager);
-        reportStatusMessage = 'Excelファイルを出力しました';
-        reportStatusIsError = false;
-      } catch (err) {
-        reportStatusMessage = 'Excel出力に失敗しました: ' + err.message;
-        reportStatusIsError = true;
-      }
-      renderReportView();
-    });
-  }
 }
 
-function reportBlock(days, startDay, endDay, year, month, holidays) {
+function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays) {
   const rows = [];
   for (let d = startDay; d <= endDay; d++) {
     const day = days[d] || {};
-    const distance = computeDistance(days, d);
+    const distance = computeDistance(days, d, year, month, nextMonthDays);
     const colorClass = dayColorClass(year, month, d, holidays);
     rows.push(`
       <tr>
