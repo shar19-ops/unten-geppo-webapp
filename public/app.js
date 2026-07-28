@@ -153,7 +153,7 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 });
 
 // ---------------- 管理者パスワード保護(車両リスト) ----------------
-const ADMIN_PASSWORD = 'anzen_kanri';
+const ADMIN_PASSWORD = 'anzn';
 const ADMIN_UNLOCK_KEY = 'ug_admin_unlocked';
 
 function isAdminUnlocked() {
