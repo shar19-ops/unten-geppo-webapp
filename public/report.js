@@ -6,6 +6,20 @@ let reportSelectedMonth = null;
 let reportStatusMessage = '';
 let reportStatusIsError = false;
 let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
+let reportAlcoholErrorCells = new Set(); // "day:field" 形式。提出時のアルコールチェック未入力バリデーションで使う
+
+// 始業前・終業後のどちらか一方だけ入力されている日を探す(両方入力済み・両方未入力は対象外)。
+function findAlcoholErrorCells(record) {
+  const errors = new Set();
+  for (let d = 1; d <= 31; d++) {
+    const day = record.days[d] || {};
+    const hasBefore = day.alcoholCheckBefore != null;
+    const hasAfter = day.alcoholCheckAfter != null;
+    if (hasBefore && !hasAfter) errors.add(`${d}:alcoholCheckAfter`);
+    if (hasAfter && !hasBefore) errors.add(`${d}:alcoholCheckBefore`);
+  }
+  return errors;
+}
 
 function reportVehicleOptions() {
   const vehicles = loadVehicles().map((v) => ({
@@ -137,8 +151,8 @@ function renderReportView() {
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
       ${(!record.issuerConfirmedAt && nextMonthHasEntry) ? `
         <div class="issuer-confirm-panel no-print">
-          <p>月末点検が完了しました。内容をご確認のうえ、発行者欄にご記入ください。</p>
-          <button class="btn btn-primary" type="button" id="issuerConfirmBtn">確認しました</button>
+          <p>運転月報の記載内容を確認後、記載内容に問題が無ければ提出してください。</p>
+          <button class="btn btn-primary" type="button" id="issuerConfirmBtn">提出</button>
         </div>
       ` : ''}
     </div>
@@ -161,7 +175,7 @@ function renderReportView() {
 
         <table class="report-table totals-table">
           <tr>
-            <td class="label-cell">走行距離合計(km)</td><td class="num-cell distance-cell">${totals.totalDistance}</td>
+            <td class="label-cell">走行距離合計(km)</td><td class="num-cell distance-cell">${totals.totalDistance.toLocaleString()}</td>
             <td class="label-cell fuel-economy-label">燃費＝走行距離合計／給油合計(km/L)</td><td class="num-cell">${totals.fuelEconomy}</td>
             <td class="label-cell">給油合計(L)</td><td class="num-cell">${totals.totalFuel.toFixed(2)}</td>
           </tr>
@@ -194,12 +208,14 @@ function renderReportView() {
   if (reportVehicleSelectEl) {
     reportVehicleSelectEl.addEventListener('change', (e) => {
       reportSelectedRef = e.target.value;
+      reportAlcoholErrorCells = new Set();
       renderReportView();
     });
   }
   document.getElementById('reportMonthSelect').addEventListener('change', (e) => {
     const [y, m] = e.target.value.split('-').map(Number);
     reportSelectedYear = y; reportSelectedMonth = m;
+    reportAlcoholErrorCells = new Set();
     renderReportView();
   });
   const reportPrintBtnEl = document.getElementById('reportPrintBtn');
@@ -207,6 +223,17 @@ function renderReportView() {
   const issuerConfirmBtnEl = document.getElementById('issuerConfirmBtn');
   if (issuerConfirmBtnEl) {
     issuerConfirmBtnEl.addEventListener('click', () => {
+      const errors = findAlcoholErrorCells(record);
+      if (errors.size) {
+        reportAlcoholErrorCells = errors;
+        reportStatusMessage = 'アルコールチェックが未入力の日があります(ピンク色のセルをご確認ください)';
+        reportStatusIsError = true;
+        renderReportView();
+        return;
+      }
+      reportAlcoholErrorCells = new Set();
+      reportStatusMessage = '';
+      reportStatusIsError = false;
       record.issuerConfirmedAt = new Date().toISOString();
       record.metaUpdatedAt = new Date().toISOString();
       saveMonthlyLog(record);
@@ -214,6 +241,20 @@ function renderReportView() {
       renderReportView();
     });
   }
+
+  document.querySelector('.report-sheet').addEventListener('change', (e) => {
+    const input = e.target.closest('input[data-field]');
+    if (!input) return;
+    const day = Number(input.dataset.day);
+    const field = input.dataset.field;
+    const numericFields = ['meterReading', 'alcoholCheckBefore', 'alcoholCheckAfter', 'fuelAdded'];
+    const value = numericFields.includes(field) ? parseNumberOrNull(input.value) : String(input.value || '').trim();
+    const savedRecord = saveTripDay(reportSelectedRef, record.year, record.month, day, { [field]: value }, { vehicleId: record.vehicleId, privateCarLabel: record.privateCarLabel });
+    syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
+    if (field === 'driver' && value) pushRecentDriver(value);
+    if (reportAlcoholErrorCells.size) reportAlcoholErrorCells = findAlcoholErrorCells(savedRecord);
+    renderReportView();
+  });
 }
 
 function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays) {
@@ -222,16 +263,18 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
     const day = days[d] || {};
     const distance = computeDistance(days, d, year, month, nextMonthDays);
     const colorClass = dayColorClass(year, month, d, holidays);
+    const beforeErrorClass = reportAlcoholErrorCells.has(`${d}:alcoholCheckBefore`) ? 'cell-error' : '';
+    const afterErrorClass = reportAlcoholErrorCells.has(`${d}:alcoholCheckAfter`) ? 'cell-error' : '';
     rows.push(`
       <tr>
         <td class="day-cell ${colorClass}">${d}</td>
-        <td class="num-cell meter-cell">${day.meterReading != null ? day.meterReading.toLocaleString() : ''}</td>
+        <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading : ''}"></td>
         <td class="num-cell distance-cell">${distance !== '' ? distance.toLocaleString() : ''}</td>
-        <td class="dest-cell">${escapeHtml(day.destination || '')}</td>
-        <td class="driver-cell">${escapeHtml(day.driver || '')}</td>
-        <td class="num-cell">${day.alcoholCheckBefore != null ? day.alcoholCheckBefore : ''}</td>
-        <td class="num-cell">${day.alcoholCheckAfter != null ? day.alcoholCheckAfter : ''}</td>
-        <td class="num-cell">${day.fuelAdded != null ? day.fuelAdded.toFixed(2) : ''}</td>
+        <td class="dest-cell"><input type="text" class="cell-input" data-day="${d}" data-field="destination" value="${escapeHtml(day.destination || '')}"></td>
+        <td class="driver-cell"><input type="text" class="cell-input" data-day="${d}" data-field="driver" value="${escapeHtml(day.driver || '')}"></td>
+        <td class="num-cell ${beforeErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckBefore" value="${day.alcoholCheckBefore != null ? day.alcoholCheckBefore : ''}"></td>
+        <td class="num-cell ${afterErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckAfter" value="${day.alcoholCheckAfter != null ? day.alcoholCheckAfter : ''}"></td>
+        <td class="num-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="fuelAdded" value="${day.fuelAdded != null ? day.fuelAdded : ''}"></td>
       </tr>
     `);
   }

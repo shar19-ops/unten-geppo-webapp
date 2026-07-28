@@ -233,6 +233,13 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .report-table td.dest-cell { text-align: left; text-indent: 1em; }
 .num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+.report-table td input.cell-input {
+  width: 100%; border: none; background: transparent; text-align: inherit;
+  font: inherit; padding: 0;
+}
+.report-table td input.cell-input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.report-table td.cell-error { background: #ffd6e0; }
+
 .checklist-table { table-layout: fixed; }
 /* table-layout:fixedは1行目(colspanセルを含む行)の幅指定しか列幅計算に使わないため、
    各列の実際の幅はcolgroupのcolで明示的に指定する(tdへのwidth指定だけでは効かない)。 */
