@@ -6,6 +6,7 @@ let reportSelectedMonth = null;
 let reportStatusMessage = '';
 let reportStatusIsError = false;
 let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
+let reportNextMonthSyncedKey = null; // 直近でクラウド同期を試みた翌月分の月報キー(月末走行距離の自動計算用)
 let reportAlcoholErrorCells = new Set(); // "day:field" 形式。提出時のアルコールチェック未入力バリデーションで使う
 
 // 始業前・終業後のどちらか一方だけ入力されている日を探す(両方入力済み・両方未入力は対象外)。
@@ -99,12 +100,22 @@ function renderReportView() {
     });
   }
 
-  // 月末日の走行距離は翌月最初の記録から計算するため、翌月分をローカルにあれば読み込んでおく
-  // (この画面の主目的ではないためクラウド同期はしない)。
+  // 月末日の走行距離は翌月最初の記録から計算する。翌月分は他の端末でしか
+  // 入力されていない場合もあるため、当月分と同様にクラウドから取得してマージする。
   const nextMonth = record.month === 12 ? 1 : record.month + 1;
   const nextYear = record.month === 12 ? record.year + 1 : record.year;
   const nextMonthRecord = loadMonthlyLog(reportSelectedRef, nextYear, nextMonth);
   const nextMonthDays = nextMonthRecord ? nextMonthRecord.days : {};
+
+  const nextMonthKey = monthlyLogKey(reportSelectedRef, nextYear, nextMonth);
+  if (reportNextMonthSyncedKey !== nextMonthKey) {
+    reportNextMonthSyncedKey = nextMonthKey;
+    syncMonthlyLogFromCloud(reportSelectedRef, nextYear, nextMonth, {
+      vehicleId: selectedOption.vehicleId, privateCarLabel: selectedOption.privateCarLabel
+    }).then((mergedRecord) => {
+      if (mergedRecord) renderReportView();
+    });
+  }
 
   // 発行者確認バナーは「翌月の運転記録が1件でも保存されたか」だけで判定する
   // (月末点検の完了状況は見ない)。

@@ -31,6 +31,7 @@ async function showView(name) {
     // タブを開くたび(既に開いている状態からの再クリックも含む)にクラウドから
     // 最新の月報データを取り直させるため、直近の同期済みキーの記録をリセットする。
     reportSyncedKey = null;
+    reportNextMonthSyncedKey = null;
     renderReportView();
   }
 }
