@@ -134,8 +134,14 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .conflict-row:last-of-type { border-bottom: none; }
 .conflict-label { min-width: 5rem; font-weight: 600; }
 .conflict-choice { display: flex; gap: 0.4rem; align-items: center; }
-.issuer-confirm-panel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border: 1px solid var(--accent); background: #eef4ff; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.issuer-confirm-panel, .safety-confirm-panel {
+  border: 1px solid var(--accent); background: #eef4ff; border-radius: 8px;
+  padding: 1rem; margin-bottom: 1rem;
+}
+.issuer-confirm-panel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .issuer-confirm-panel p { margin: 0; }
+.safety-confirm-panel p { margin: 0 0 0.75rem; }
+.safety-confirm-panel .form-actions { margin-top: 0.75rem; }
 
 /* --- テーブル(社有車リスト) --- */
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }

@@ -163,7 +163,13 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     // レコードに文言を焼き込まないことで、将来文言を直しても既存データの表示が自動的に追従する。
     checklistMid: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
     checklistEnd: FIXED_CHECKLIST_ITEMS.map(() => ({ result: null })),
-    issuerConfirmedAt: null,
+    // 未確定は空文字(nullは使わない)。Firebase Realtime DatabaseはPUT時に値がnullの
+    // キーを丸ごと削除するため、差戻し等で「確定済み→未確定」に戻すと、他端末が読み込んだ
+    // 際にそのフィールド自体が存在しない(undefined)扱いになり、ローカルの古い確定値が
+    // 上書きされず残ってしまう。空文字ならFirebase上にも値として残るため、この問題を避けられる。
+    issuerConfirmedAt: '',
+    safetyManagerConfirmedAt: '',
+    safetyManagerName: '',
     metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
@@ -229,6 +235,8 @@ function buildMetaPayload(record) {
     checklistMid: record.checklistMid,
     checklistEnd: record.checklistEnd,
     issuerConfirmedAt: record.issuerConfirmedAt,
+    safetyManagerConfirmedAt: record.safetyManagerConfirmedAt,
+    safetyManagerName: record.safetyManagerName,
     updatedAt: record.metaUpdatedAt
   };
 }
@@ -366,9 +374,15 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
     const localTime = local.metaUpdatedAt ? Date.parse(local.metaUpdatedAt) : -Infinity;
     const cloudTime = cloudMeta.updatedAt ? Date.parse(cloudMeta.updatedAt) : -Infinity;
     if (cloudTime > localTime) {
+      // cloudMetaに項目が無い(旧バージョンが書き込んだデータ)場合はローカルの値を残すが、
+      // 明示的なnull(差戻しによるissuerConfirmedAtのクリア等)はそのまま採用する
+      // (?? だとnullも「無い」扱いになりリセットがローカルへ反映されなくなるため使わない)。
+      const adoptCloud = (cloudValue, localValue) => (cloudValue !== undefined ? cloudValue : localValue);
       local.checklistMid = cloudMeta.checklistMid || local.checklistMid;
       local.checklistEnd = cloudMeta.checklistEnd || local.checklistEnd;
-      local.issuerConfirmedAt = cloudMeta.issuerConfirmedAt ?? local.issuerConfirmedAt;
+      local.issuerConfirmedAt = adoptCloud(cloudMeta.issuerConfirmedAt, local.issuerConfirmedAt);
+      local.safetyManagerConfirmedAt = adoptCloud(cloudMeta.safetyManagerConfirmedAt, local.safetyManagerConfirmedAt);
+      local.safetyManagerName = adoptCloud(cloudMeta.safetyManagerName, local.safetyManagerName);
       local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }
