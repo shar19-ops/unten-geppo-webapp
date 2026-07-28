@@ -304,8 +304,8 @@ function renderReportView() {
       if (!confirm('差し戻します。車両管理者は再度「提出」が必要になります。よろしいですか?')) return;
       const subject = '運転月報の再提出依頼';
       const body = '運転月報の提出ありがとうございます。\n' +
-        '　　　提出いただきました運転月報ですが内容に不備がありますので見直しをして再提出をお願いいたします。\n' +
-        '　　　安全品質保証部';
+        '提出いただきました運転月報ですが、内容に不備がありますので、見直しをして再提出をお願いいたします。\n' +
+        '安全品質保証部';
       location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
       record.issuerConfirmedAt = ''; // nullにするとFirebase側でキーごと消えてしまい、他端末の
