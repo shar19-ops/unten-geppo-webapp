@@ -2,6 +2,22 @@
 
 const VEHICLE_TYPE_LABELS = { company: '社有車', private: '私有車' };
 
+// 事業所名の並び順(OFFICE_NAMES = storage.jsの支店プルダウンと同じ順)。
+// クラウド同期のたびにFirebaseから返る順序が変わり、車両リストの表示順が
+// 意図せず入れ替わってしまうため、常にこの順で並べ直す。未登録の事業所名は末尾。
+function officeSortIndex(officeName) {
+  const idx = OFFICE_NAMES.indexOf(officeName);
+  return idx === -1 ? OFFICE_NAMES.length : idx;
+}
+
+function sortVehiclesByOffice(list) {
+  return [...list].sort((a, b) => {
+    const officeDiff = officeSortIndex(a.officeName) - officeSortIndex(b.officeName);
+    if (officeDiff !== 0) return officeDiff;
+    return String(a.plateNumber || '').localeCompare(String(b.plateNumber || ''), 'ja');
+  });
+}
+
 let vehicleActiveTab = 'company'; // 'company' | 'private'
 let vehicleFormState = null; // null=非表示, {vehicleType,...}=新規/編集中
 let vehicleImportConflicts = null; // インポート後、競合があれば{merged, conflicts}を保持
@@ -13,7 +29,7 @@ function renderVehiclesView() {
   const root = document.getElementById('view-vehicles');
   const allVehicles = loadVehicles();
   const tabLabel = VEHICLE_TYPE_LABELS[vehicleActiveTab];
-  const vehicles = allVehicles.filter((v) => (v.vehicleType || 'company') === vehicleActiveTab);
+  const vehicles = sortVehiclesByOffice(allVehicles.filter((v) => (v.vehicleType || 'company') === vehicleActiveTab));
 
   root.innerHTML = `
     <div class="panel">
