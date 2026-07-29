@@ -83,7 +83,7 @@ function findExistingDayData(vehicleId, dateStr) {
 }
 
 function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
-  if (tripQrVehicleId) {
+  if (tripQrVehicleId && !isAdminUnlocked()) {
     const lockedVehicle = [...companyVehicles, ...privateVehicles].find((v) => v.id === tripQrVehicleId);
     if (lockedVehicle) {
       return `
@@ -254,6 +254,7 @@ function onChecklistPromptSubmit(e) {
         ? '適切な処置または整備工場などに持込み修理を行なってください。'
         : '適切な処置または、自動車修理依頼書を発行してください。');
     }
+    showToast('点検結果を保存しました');
   }
   tripPendingChecklists = tripPendingChecklists.slice(1);
   tripStatusMessage = '点検結果を保存しました';
@@ -331,6 +332,7 @@ function onTripEntrySubmit(e) {
   tripPendingChecklists = checklistEventsDue(savedRecord, day).map((d) => ({ ...d, vehicleRef, year, month, day }));
   tripStatusMessage = `保存しました(${year}年${month}月${day}日)`;
   tripStatusIsError = false;
+  showToast('保存しました');
   tripSelectedDate = todayIso();
   tripSelectedVehicleId = null;
   renderTripEntryView();
@@ -366,5 +368,6 @@ function onFuelEntrySubmit(e) {
 
   tripStatusMessage = `給油量を記録しました(${year}年${month}月${day}日・${fuelAdded}L)`;
   tripStatusIsError = false;
+  showToast('給油を記録しました');
   renderTripEntryView();
 }

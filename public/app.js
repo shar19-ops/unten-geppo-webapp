@@ -16,6 +16,20 @@ function loadScriptOnce(src) {
   });
 }
 
+// 各種保存・提出操作の完了を知らせる、数秒で自動的に消えるトースト通知。
+function showToast(message) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-visible'));
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  }, 1800);
+}
+
 async function showView(name) {
   VIEWS.forEach((v) => {
     document.getElementById(`view-${v}`).classList.toggle('active', v === name);
@@ -188,6 +202,7 @@ function confirmAdminPassword() {
     setVehiclesTabVisible(true);
     document.getElementById('adminModeCheck').checked = true;
     if (document.body.dataset.view === 'report') renderReportView();
+    if (document.body.dataset.view === 'trip-entry') renderTripEntryView();
   } else {
     document.getElementById('adminPwError').textContent = 'パスワードが違います';
     input.value = '';
@@ -200,6 +215,7 @@ document.getElementById('adminModeCheck').addEventListener('change', (e) => {
     if (isAdminUnlocked()) {
       setVehiclesTabVisible(true);
       if (document.body.dataset.view === 'report') renderReportView();
+      if (document.body.dataset.view === 'trip-entry') renderTripEntryView();
       return;
     }
     e.target.checked = false;
@@ -208,6 +224,7 @@ document.getElementById('adminModeCheck').addEventListener('change', (e) => {
     sessionStorage.removeItem(ADMIN_UNLOCK_KEY);
     setVehiclesTabVisible(false);
     if (document.body.dataset.view === 'report') renderReportView();
+    if (document.body.dataset.view === 'trip-entry') renderTripEntryView();
   }
 });
 document.getElementById('adminPwConfirmBtn').addEventListener('click', confirmAdminPassword);
@@ -236,26 +253,54 @@ if (window.caches) {
 }
 
 // アプリ起動処理: 車両マスタをFirebaseから同期してから、QRパラメータの解決・初期画面表示を行う
-// (社有車・私有車問わず?vehicle=<id>を読み取り、運転記録入力へ車両自動選択で遷移する)
+// (社有車・私有車問わず?vehicle=<id>(旧方式)または?qrToken=<トークン>(再発行対応の新方式)を
+// 読み取り、運転記録入力へ車両自動選択で遷移する)
+const QR_VEHICLE_LOCK_KEY = 'ug_qr_vehicle_id';
+
 async function bootstrapApp() {
   await syncVehiclesFromCloud();
   flushPendingLogSync();
 
   const params = new URLSearchParams(location.search);
-  const qrVehicleId = params.get('vehicle');
+  const vehicleParam = params.get('vehicle');
+  const qrToken = params.get('qrToken');
+  const hasQrParam = !!(vehicleParam || qrToken);
+
+  // URLに?vehicle=/?qrToken=が直接付いている場合は、そのパラメータだけで厳密に解決する
+  // (無効なトークンをsessionStorageの古いロックでこっそり救済しない)。付いていない場合
+  // (通常の更新)だけ、更新前にロックしていた車両をこのタブの間だけ復元する。
+  let qrVehicleId;
+  if (hasQrParam) {
+    qrVehicleId = vehicleParam || (loadVehicles().find((v) => v.qrToken === qrToken) || {}).id || null;
+  } else {
+    qrVehicleId = sessionStorage.getItem(QR_VEHICLE_LOCK_KEY);
+  }
+
   if (qrVehicleId) {
     const vehicles = loadVehicles().filter((v) => v.active !== false);
     const matched = vehicles.find((v) => v.id === qrVehicleId);
     if (matched) {
       tripUsePrivateCar = matched.vehicleType === 'private';
       tripQrVehicleId = qrVehicleId;
+      sessionStorage.setItem(QR_VEHICLE_LOCK_KEY, qrVehicleId);
     } else {
-      tripUsePrivateCar = false;
-      tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
-      tripStatusIsError = true;
+      sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+      // URLに直接付いていたパラメータが無効だった場合のみエラー表示する
+      // (sessionStorage復元での失敗は静かに諦め、通常の選択画面に戻す)。
+      if (hasQrParam) {
+        tripUsePrivateCar = false;
+        tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
+        tripStatusIsError = true;
+      }
     }
-    history.replaceState(null, '', location.pathname);
+  } else if (hasQrParam) {
+    // qrTokenがどの車両にも一致しなかった場合(再発行で無効化された旧トークン等)
+    sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+    tripUsePrivateCar = false;
+    tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
+    tripStatusIsError = true;
   }
+  if (hasQrParam) history.replaceState(null, '', location.pathname);
 
   // Teams通知のリンクから開いた場合、該当の車両・年月を選択した状態で
   // 運転月報を自動的に開く(発行者確認イベント用)。
