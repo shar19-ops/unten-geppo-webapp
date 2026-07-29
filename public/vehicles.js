@@ -97,14 +97,15 @@ function renderVehiclesView() {
 
   root.querySelectorAll('.vehicle-qr-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const vehicle = allVehicles.find((x) => x.id === btn.dataset.id);
+      let vehicle = allVehicles.find((x) => x.id === btn.dataset.id);
       await loadScriptOnce('vendor/qrcode/qrcode.js');
-      const url = `${location.origin}${location.pathname}?vehicle=${encodeURIComponent(vehicle.id)}`;
-      const qr = qrcode(0, 'M');
-      qr.addData(url);
-      qr.make();
-      vehicleQrState = { vehicle, url, svg: qr.createSvgTag(6, 8) };
-      renderVehiclesView();
+      // 新規発行分は再発行(旧QR無効化)に対応できるよう、車両ID直付けではなく
+      // 個別のqrTokenを使う。まだ発行していない車両はここで初めて発行する。
+      if (!vehicle.qrToken) {
+        const result = await pushVehicleToCloud({ id: vehicle.id, qrToken: generateId() });
+        if (result.ok) vehicle = result.vehicle;
+      }
+      buildAndShowQr(vehicle);
     });
   });
   root.querySelectorAll('.vehicle-edit-btn').forEach((btn) => {
@@ -150,6 +151,17 @@ function renderVehiclesView() {
       renderVehiclesView();
     });
     document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
+    document.getElementById('qrReissueBtn').addEventListener('click', async () => {
+      if (!confirm('再発行すると、今まで印刷済みのQRコードは使えなくなります。よろしいですか?')) return;
+      const result = await pushVehicleToCloud({ id: vehicleQrState.vehicle.id, qrToken: generateId() });
+      if (!result.ok) {
+        setVehicleStatus('再発行できませんでした(通信エラー)', true);
+        renderVehiclesView();
+        return;
+      }
+      showToast('QRコードを再発行しました');
+      buildAndShowQr(result.vehicle);
+    });
     document.getElementById('qrCloseBtn').addEventListener('click', () => {
       vehicleQrState = null;
       renderVehiclesView();
@@ -164,6 +176,16 @@ function renderVehiclesView() {
       renderVehiclesView();
     });
   }
+}
+
+// QRコードのURL・SVGを組み立ててパネル表示状態にする(初回発行・再発行の両方から呼ぶ)。
+function buildAndShowQr(vehicle) {
+  const url = `${location.origin}${location.pathname}?qrToken=${encodeURIComponent(vehicle.qrToken)}`;
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  vehicleQrState = { vehicle, url, svg: qr.createSvgTag(6, 8) };
+  renderVehiclesView();
 }
 
 function setVehicleStatus(message, isError) {
@@ -198,6 +220,7 @@ function qrPanelHtml(state) {
         <div class="panel-actions">
           <button class="btn btn-ghost" type="button" id="qrCopyUrlBtn">URLをコピー</button>
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
+          <button class="btn btn-ghost" type="button" id="qrReissueBtn">QRコードを再発行</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
         </div>
       </div>
@@ -280,6 +303,7 @@ async function onVehicleFormSubmit(e) {
     return;
   }
   setVehicleStatus(`保存しました(${plateNumber})`, false);
+  showToast('保存しました');
   vehicleFormState = null;
   renderVehiclesView();
 }

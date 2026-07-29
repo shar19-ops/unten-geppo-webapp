@@ -41,7 +41,7 @@ function reportVehicleOptions() {
     ref, label: `${label}（私有車・未登録）`, vehicleId: null, privateCarLabel: label
   }));
   const allOptions = [...vehicles, ...legacyPrivateOptions];
-  if (tripQrVehicleId) {
+  if (tripQrVehicleId && !isAdminUnlocked()) {
     const locked = allOptions.filter((o) => o.ref === tripQrVehicleId);
     if (locked.length) return locked;
   }
@@ -82,7 +82,7 @@ function renderReportView() {
   if (!reportSelectedMonth) reportSelectedMonth = now.getMonth() + 1;
 
   const selectedOption = options.find((o) => o.ref === reportSelectedRef);
-  const isLocked = tripQrVehicleId && options.length === 1 && options[0].ref === tripQrVehicleId;
+  const isLocked = tripQrVehicleId && !isAdminUnlocked() && options.length === 1 && options[0].ref === tripQrVehicleId;
   const monthOptions = buildMonthOptions(reportSelectedRef, reportSelectedYear, reportSelectedMonth);
   const record = loadMonthlyLog(reportSelectedRef, reportSelectedYear, reportSelectedMonth)
     || createEmptyMonthlyLog(reportSelectedRef, reportSelectedYear, reportSelectedMonth, {
@@ -265,6 +265,7 @@ function renderReportView() {
       record.metaUpdatedAt = new Date().toISOString();
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      showToast('提出しました');
       renderReportView();
     });
   }
@@ -294,6 +295,7 @@ function renderReportView() {
       reportStatusIsError = false;
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      showToast('確認しました');
       renderReportView();
     });
   }
@@ -314,6 +316,7 @@ function renderReportView() {
       reportSafetyManagerNameDraft = '';
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      showToast('差戻しました');
       renderReportView();
     });
   }
