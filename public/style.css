@@ -36,6 +36,12 @@ body {
   justify-content: space-between;
 }
 .app-header h1 { font-size: 1.15rem; margin: 0; }
+.app-version {
+  font-size: 0.65rem;
+  font-weight: normal;
+  color: var(--text-muted, #888);
+  vertical-align: middle;
+}
 
 .tabbar { display: flex; gap: 0.5rem; }
 .tab-btn {
