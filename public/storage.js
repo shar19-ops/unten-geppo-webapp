@@ -395,6 +395,34 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
   return null;
 }
 
+// ---------------- 管理者向け:月次の全車両提出状況一覧 ----------------
+// 指定年月の全車両分の提出状況(meta)だけをまとめて取得する。日々の運転記録(days)は
+// 一覧表示に不要なため取得しない。/logs.jsonを1回だけ読み、キー末尾が"_year_month"の
+// ものだけ拾う(vehicleRef自体にアンダースコアを含んでいても、末尾一致で安全に元の
+// vehicleRefへ戻せる)。
+async function fetchSubmissionStatusForMonth(year, month) {
+  const suffix = `_${year}_${month}`;
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/logs.json`);
+    if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
+    const data = await res.json();
+    const map = new Map();
+    Object.entries(data || {}).forEach(([key, entry]) => {
+      if (!key.endsWith(suffix)) return;
+      const vehicleRef = key.slice(0, -suffix.length);
+      const meta = (entry && entry.meta) || {};
+      map.set(vehicleRef, {
+        issuerConfirmedAt: meta.issuerConfirmedAt || '',
+        safetyManagerConfirmedAt: meta.safetyManagerConfirmedAt || '',
+        safetyManagerName: meta.safetyManagerName || ''
+      });
+    });
+    return map;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------- 発行者確認イベント(Teams通知連携) ----------------
 // Microsoft Teamsのワークフロー(Webhook)のURL。このリポジトリは公開設定のため、
 // このURLも第三者から閲覧可能な状態になるが、既存のFIREBASE_DB_URL・ADMIN_PASSWORDと
