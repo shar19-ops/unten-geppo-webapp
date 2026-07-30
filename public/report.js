@@ -7,21 +7,32 @@ let reportStatusMessage = '';
 let reportStatusIsError = false;
 let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キー(同じキーの間は再同期しない)
 let reportNextMonthSyncedKey = null; // 直近でクラウド同期を試みた翌月分の月報キー(月末走行距離の自動計算用)
-let reportAlcoholErrorCells = new Set(); // "day:field" 形式。提出時のアルコールチェック未入力バリデーションで使う
+let reportCellErrors = new Set(); // "day:<日>:<field>" / "checklist:<listKey>:<index>" 形式。提出時バリデーションで使う
 let reportSafetyManagerNameDraft = ''; // 安全運転管理者名の入力途中の値を再描画間で保持する
 let reportShowStatusList = false; // 管理者向け「提出状況一覧」表示中か
 let reportStatusListData = undefined; // undefined=未取得、null=取得失敗、Map=取得成功
+let reportJustSubmitted = false; // 直前の「提出」操作が成功した直後かどうか
 
-// 始業前・終業後のどちらか一方だけ入力されている日を探す(両方入力済み・両方未入力は対象外)。
-function findAlcoholErrorCells(record) {
+// 提出時のバリデーション。出庫時メーター指針が入力されている日は、走行距離(自動計算)・
+// 行先・運転者・アルコールチェック2回がすべて入力されていることを要求する。あわせて、
+// 15日・末日の日常点検が両方とも記録済み(全項目にresultがある)ことを要求する。
+function findSubmissionErrorCells(record, nextMonthDays) {
   const errors = new Set();
   for (let d = 1; d <= 31; d++) {
     const day = record.days[d] || {};
-    const hasBefore = day.alcoholCheckBefore != null;
-    const hasAfter = day.alcoholCheckAfter != null;
-    if (hasBefore && !hasAfter) errors.add(`${d}:alcoholCheckAfter`);
-    if (hasAfter && !hasBefore) errors.add(`${d}:alcoholCheckBefore`);
+    if (day.meterReading == null) continue;
+    const distance = computeDistance(record.days, d, record.year, record.month, nextMonthDays);
+    if (distance === '') errors.add(`day:${d}:distance`);
+    if (!day.destination) errors.add(`day:${d}:destination`);
+    if (!day.driver) errors.add(`day:${d}:driver`);
+    if (day.alcoholCheckBefore == null) errors.add(`day:${d}:alcoholCheckBefore`);
+    if (day.alcoholCheckAfter == null) errors.add(`day:${d}:alcoholCheckAfter`);
   }
+  ['checklistMid', 'checklistEnd'].forEach((listKey) => {
+    (record[listKey] || []).forEach((item, i) => {
+      if (!item || item.result == null) errors.add(`checklist:${listKey}:${i}`);
+    });
+  });
   return errors;
 }
 
@@ -74,6 +85,15 @@ function renderReportView() {
   const root = document.getElementById('view-report');
   if (isAdminUnlocked() && reportShowStatusList) {
     renderReportStatusList(root);
+    return;
+  }
+  if (reportJustSubmitted) {
+    root.innerHTML = `
+      <div class="panel">
+        <h2>運転月報</h2>
+        <p class="status ok">運転月報を提出しました。このタブを閉じてください。</p>
+      </div>
+    `;
     return;
   }
   const options = reportVehicleOptions();
@@ -206,7 +226,7 @@ function renderReportView() {
       </div>
 
       ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays)}
-      ${checklistBlock('点検日15日', record.checklistMid)}
+      ${checklistBlock('点検日15日', record.checklistMid, 'checklistMid')}
       <p class="print-page-number">1 / 2</p>
       <div class="report-page2">
         ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays)}
@@ -219,7 +239,7 @@ function renderReportView() {
           </tr>
         </table>
 
-        ${checklistBlock('点検日は月の末日', record.checklistEnd)}
+        ${checklistBlock('点検日は月の末日', record.checklistEnd, 'checklistEnd')}
         <table class="report-table print-stamp-table">
           <colgroup>
             <col style="width: 23mm;">
@@ -246,7 +266,7 @@ function renderReportView() {
   if (reportVehicleSelectEl) {
     reportVehicleSelectEl.addEventListener('change', (e) => {
       reportSelectedRef = e.target.value;
-      reportAlcoholErrorCells = new Set();
+      reportCellErrors = new Set();
       reportSafetyManagerNameDraft = '';
       renderReportView();
     });
@@ -254,7 +274,7 @@ function renderReportView() {
   document.getElementById('reportMonthSelect').addEventListener('change', (e) => {
     const [y, m] = e.target.value.split('-').map(Number);
     reportSelectedYear = y; reportSelectedMonth = m;
-    reportAlcoholErrorCells = new Set();
+    reportCellErrors = new Set();
     reportSafetyManagerNameDraft = '';
     renderReportView();
   });
@@ -271,22 +291,29 @@ function renderReportView() {
   const issuerConfirmBtnEl = document.getElementById('issuerConfirmBtn');
   if (issuerConfirmBtnEl) {
     issuerConfirmBtnEl.addEventListener('click', () => {
-      const errors = findAlcoholErrorCells(record);
+      const errors = findSubmissionErrorCells(record, nextMonthDays);
       if (errors.size) {
-        reportAlcoholErrorCells = errors;
-        reportStatusMessage = 'アルコールチェックが未入力の日があります(ピンク色のセルをご確認ください)';
+        reportCellErrors = errors;
+        const messages = [];
+        if (Array.from(errors).some((k) => k.startsWith('day:'))) {
+          messages.push('出庫時メーター指針が入力されている日で、走行距離・行先・運転者・アルコールチェック(始業前/終業後)のいずれかが未入力の日があります(ピンク色のセルをご確認ください)');
+        }
+        if (Array.from(errors).some((k) => k.startsWith('checklist:'))) {
+          messages.push('日常点検(15日・末日)の記録が未入力の項目があります(ピンク色の項目をご確認ください)');
+        }
+        reportStatusMessage = messages.join(' ');
         reportStatusIsError = true;
         renderReportView();
         return;
       }
-      reportAlcoholErrorCells = new Set();
+      reportCellErrors = new Set();
       reportStatusMessage = '';
       reportStatusIsError = false;
       record.issuerConfirmedAt = new Date().toISOString();
       record.metaUpdatedAt = new Date().toISOString();
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
-      showToast('提出しました');
+      reportJustSubmitted = true;
       renderReportView();
     });
   }
@@ -344,16 +371,29 @@ function renderReportView() {
 
   document.querySelector('.report-sheet').addEventListener('change', (e) => {
     const input = e.target.closest('input[data-field]');
-    if (!input) return;
-    const day = Number(input.dataset.day);
-    const field = input.dataset.field;
-    const numericFields = ['meterReading', 'alcoholCheckBefore', 'alcoholCheckAfter', 'fuelAdded'];
-    const value = numericFields.includes(field) ? parseNumberOrNull(input.value) : String(input.value || '').trim();
-    const savedRecord = saveTripDay(reportSelectedRef, record.year, record.month, day, { [field]: value }, { vehicleId: record.vehicleId, privateCarLabel: record.privateCarLabel });
-    syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
-    if (field === 'driver' && value) pushRecentDriver(value);
-    if (reportAlcoholErrorCells.size) reportAlcoholErrorCells = findAlcoholErrorCells(savedRecord);
-    renderReportView();
+    if (input) {
+      const day = Number(input.dataset.day);
+      const field = input.dataset.field;
+      const numericFields = ['meterReading', 'alcoholCheckBefore', 'alcoholCheckAfter', 'fuelAdded'];
+      const value = numericFields.includes(field) ? parseNumberOrNull(input.value) : String(input.value || '').trim();
+      const savedRecord = saveTripDay(reportSelectedRef, record.year, record.month, day, { [field]: value }, { vehicleId: record.vehicleId, privateCarLabel: record.privateCarLabel });
+      syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
+      if (field === 'driver' && value) pushRecentDriver(value);
+      if (reportCellErrors.size) reportCellErrors = findSubmissionErrorCells(savedRecord, nextMonthDays);
+      renderReportView();
+      return;
+    }
+    const select = e.target.closest('select.checklist-result-select');
+    if (select) {
+      const listKey = select.dataset.checklistList;
+      const idx = Number(select.dataset.checklistIndex);
+      record[listKey][idx].result = select.value || null;
+      record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      if (reportCellErrors.size) reportCellErrors = findSubmissionErrorCells(record, nextMonthDays);
+      renderReportView();
+    }
   });
 }
 
@@ -428,7 +468,7 @@ function renderReportStatusList(root) {
     tr.addEventListener('click', () => {
       reportSelectedRef = tr.dataset.vehicleRef;
       reportShowStatusList = false;
-      reportAlcoholErrorCells = new Set();
+      reportCellErrors = new Set();
       reportSafetyManagerNameDraft = '';
       renderReportView();
     });
@@ -441,15 +481,18 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
     const day = days[d] || {};
     const distance = computeDistance(days, d, year, month, nextMonthDays);
     const colorClass = dayColorClass(year, month, d, holidays);
-    const beforeErrorClass = reportAlcoholErrorCells.has(`${d}:alcoholCheckBefore`) ? 'cell-error' : '';
-    const afterErrorClass = reportAlcoholErrorCells.has(`${d}:alcoholCheckAfter`) ? 'cell-error' : '';
+    const distanceErrorClass = reportCellErrors.has(`day:${d}:distance`) ? 'cell-error' : '';
+    const destErrorClass = reportCellErrors.has(`day:${d}:destination`) ? 'cell-error' : '';
+    const driverErrorClass = reportCellErrors.has(`day:${d}:driver`) ? 'cell-error' : '';
+    const beforeErrorClass = reportCellErrors.has(`day:${d}:alcoholCheckBefore`) ? 'cell-error' : '';
+    const afterErrorClass = reportCellErrors.has(`day:${d}:alcoholCheckAfter`) ? 'cell-error' : '';
     rows.push(`
       <tr>
         <td class="day-cell ${colorClass}">${d}</td>
         <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading : ''}"></td>
-        <td class="num-cell distance-cell">${distance !== '' ? distance.toLocaleString() : ''}</td>
-        <td class="dest-cell"><input type="text" class="cell-input" data-day="${d}" data-field="destination" value="${escapeHtml(day.destination || '')}"></td>
-        <td class="driver-cell"><input type="text" class="cell-input" data-day="${d}" data-field="driver" value="${escapeHtml(day.driver || '')}"></td>
+        <td class="num-cell distance-cell ${distanceErrorClass}">${distance !== '' ? distance.toLocaleString() : ''}</td>
+        <td class="dest-cell ${destErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="destination" value="${escapeHtml(day.destination || '')}"></td>
+        <td class="driver-cell ${driverErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="driver" value="${escapeHtml(day.driver || '')}"></td>
         <td class="num-cell ${beforeErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckBefore" value="${day.alcoholCheckBefore != null ? day.alcoholCheckBefore : ''}"></td>
         <td class="num-cell ${afterErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckAfter" value="${day.alcoholCheckAfter != null ? day.alcoholCheckAfter : ''}"></td>
         <td class="num-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="fuelAdded" value="${day.fuelAdded != null ? day.fuelAdded : ''}"></td>
@@ -479,14 +522,23 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
 // 右端に結果(○/×)列、下に記入方法の注記)をそのまま再現する。
 // colgroupで列幅を明示するのは、table-layout:fixedでは1行目のcolspanセルしか列幅計算に
 // 使われず、2行目以降のtd幅指定(番号セル等)が無視されてしまうため。
-function checklistBlock(headerNote, items) {
-  const rows = items.map((item, i) => `
+function checklistBlock(headerNote, items, listKey) {
+  const rows = items.map((item, i) => {
+    const errorClass = reportCellErrors.has(`checklist:${listKey}:${i}`) ? 'cell-error' : '';
+    return `
     <tr>
       <td class="checklist-num">${i + 1}</td>
       <td class="checklist-item">${FIXED_CHECKLIST_ITEMS[i]}</td>
-      <td class="checklist-result">${escapeHtml(item.result || '')}</td>
+      <td class="checklist-result ${errorClass}">
+        <select class="checklist-result-select" data-checklist-list="${listKey}" data-checklist-index="${i}">
+          <option value="" ${!item.result ? 'selected' : ''}></option>
+          <option value="○" ${item.result === '○' ? 'selected' : ''}>○</option>
+          <option value="×" ${item.result === '×' ? 'selected' : ''}>×</option>
+        </select>
+      </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   return `
     <table class="report-table checklist-table">
       <colgroup>

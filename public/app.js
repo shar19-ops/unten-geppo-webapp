@@ -46,6 +46,7 @@ async function showView(name) {
     // 最新の月報データを取り直させるため、直近の同期済みキーの記録をリセットする。
     reportSyncedKey = null;
     reportNextMonthSyncedKey = null;
+    reportJustSubmitted = false;
     renderReportView();
   }
 }
