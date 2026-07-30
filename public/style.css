@@ -187,6 +187,13 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   background: #fff;
   color: var(--text);
 }
+/* iOSのSafariはinput[type=date]にネイティブの見た目(角丸・影・高さ)を強制的に
+   適用するため、-webkit-appearance/appearanceをリセットしないと他の.input-lgと
+   サイズ・見た目が揃わない。 */
+input[type="date"].input-lg {
+  -webkit-appearance: none;
+  appearance: none;
+}
 .input-lg:focus, .input-sm:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .input-sm { min-height: 40px; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: #fff; }
 .segmented { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
