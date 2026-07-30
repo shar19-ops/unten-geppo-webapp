@@ -256,6 +256,14 @@ if (window.caches) {
 // (社有車・私有車問わず?vehicle=<id>(旧方式)または?qrToken=<トークン>(再発行対応の新方式)を
 // 読み取り、運転記録入力へ車両自動選択で遷移する)
 const QR_VEHICLE_LOCK_KEY = 'ug_qr_vehicle_id';
+const QR_BLOCKED_VEHICLE_KEY = 'ug_qr_blocked_vehicle_id';
+
+// QR対象の車両が現在使用不可(期限切れ・停止中)の場合に表示する案内文を組み立てる。
+function buildQrBlockedMessage(v) {
+  const reason = isPermitExpired(v) ? '使用許可期限切れ' : '停止中';
+  const label = `${v.plateNumber}（${v.nickname || (v.vehicleType === 'private' ? '私有車' : '車種未設定')}）`;
+  return `${label}は${reason}のため使用できません。車両管理者にご連絡ください。`;
+}
 
 // 私有車の使用許可期限が1週間以内に迫っている場合、アプリを開いた人に一度だけ知らせる
 // (端末のlocalStorageに車両ID+期限日付で記録する。期限を延長すると日付が変わるため、
@@ -289,23 +297,34 @@ async function bootstrapApp() {
 
   // URLに?vehicle=/?qrToken=が直接付いている場合は、そのパラメータだけで厳密に解決する
   // (無効なトークンをsessionStorageの古いロックでこっそり救済しない)。付いていない場合
-  // (通常の更新)だけ、更新前にロックしていた車両をこのタブの間だけ復元する。
+  // (通常の更新)だけ、更新前にロックしていた車両・ブロック状態をこのタブの間だけ復元する。
   let qrVehicleId;
+  let qrBlockedVehicleId = null;
   if (hasQrParam) {
     qrVehicleId = vehicleParam || (loadVehicles().find((v) => v.qrToken === qrToken) || {}).id || null;
   } else {
     qrVehicleId = sessionStorage.getItem(QR_VEHICLE_LOCK_KEY);
+    qrBlockedVehicleId = sessionStorage.getItem(QR_BLOCKED_VEHICLE_KEY);
   }
 
   if (qrVehicleId) {
-    const vehicles = loadVehicles().filter(isVehicleUsable);
-    const matched = vehicles.find((v) => v.id === qrVehicleId);
+    const rawMatch = loadVehicles().find((v) => v.id === qrVehicleId);
+    const matched = rawMatch && isVehicleUsable(rawMatch) ? rawMatch : null;
     if (matched) {
       tripUsePrivateCar = matched.vehicleType === 'private';
       tripQrVehicleId = qrVehicleId;
       sessionStorage.setItem(QR_VEHICLE_LOCK_KEY, qrVehicleId);
+      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
+    } else if (rawMatch) {
+      // 車両自体は存在するが使用不可(期限切れ・停止中)。「見つかりませんでした」として
+      // 開放的な車両選択画面に落とすと誰でも他の車両を選べてしまうため、そうはせず
+      // 理由を明示して入力そのものをブロックする(管理者モードのみ例外的に通常表示へ)。
+      sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+      sessionStorage.setItem(QR_BLOCKED_VEHICLE_KEY, qrVehicleId);
+      tripQrBlockedMessage = buildQrBlockedMessage(rawMatch);
     } else {
       sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
       // URLに直接付いていたパラメータが無効だった場合のみエラー表示する
       // (sessionStorage復元での失敗は静かに諦め、通常の選択画面に戻す)。
       if (hasQrParam) {
@@ -313,6 +332,14 @@ async function bootstrapApp() {
         tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
         tripStatusIsError = true;
       }
+    }
+  } else if (qrBlockedVehicleId) {
+    // 更新前がブロック状態だった場合、期限延長等で解消されていないか再確認してから復元する。
+    const rawMatch = loadVehicles().find((v) => v.id === qrBlockedVehicleId);
+    if (rawMatch && !isVehicleUsable(rawMatch)) {
+      tripQrBlockedMessage = buildQrBlockedMessage(rawMatch);
+    } else {
+      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
     }
   } else if (hasQrParam) {
     // qrTokenがどの車両にも一致しなかった場合(再発行で無効化された旧トークン等)
