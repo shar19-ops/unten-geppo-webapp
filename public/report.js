@@ -9,6 +9,8 @@ let reportSyncedKey = null; // 直近でクラウド同期を試みた月報キ�
 let reportNextMonthSyncedKey = null; // 直近でクラウド同期を試みた翌月分の月報キー(月末走行距離の自動計算用)
 let reportAlcoholErrorCells = new Set(); // "day:field" 形式。提出時のアルコールチェック未入力バリデーションで使う
 let reportSafetyManagerNameDraft = ''; // 安全運転管理者名の入力途中の値を再描画間で保持する
+let reportShowStatusList = false; // 管理者向け「提出状況一覧」表示中か
+let reportStatusListData = undefined; // undefined=未取得、null=取得失敗、Map=取得成功
 
 // 始業前・終業後のどちらか一方だけ入力されている日を探す(両方入力済み・両方未入力は対象外)。
 function findAlcoholErrorCells(record) {
@@ -48,22 +50,32 @@ function reportVehicleOptions() {
   return allOptions;
 }
 
-function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
+// 直近12ヶ月+選択中の年月を年月選択肢として返す(車両非依存)。
+function recentMonthOptions(selectedYear, selectedMonth) {
   const now = new Date();
   const map = new Map();
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     map.set(`${d.getFullYear()}-${d.getMonth() + 1}`, { year: d.getFullYear(), month: d.getMonth() + 1 });
   }
+  map.set(`${selectedYear}-${selectedMonth}`, { year: selectedYear, month: selectedMonth });
+  return map;
+}
+
+function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
+  const map = recentMonthOptions(selectedYear, selectedMonth);
   listMonthlyLogKeysForVehicle(vehicleRef).forEach((e) => {
     map.set(`${e.year}-${e.month}`, { year: e.year, month: e.month });
   });
-  map.set(`${selectedYear}-${selectedMonth}`, { year: selectedYear, month: selectedMonth });
   return Array.from(map.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
 function renderReportView() {
   const root = document.getElementById('view-report');
+  if (isAdminUnlocked() && reportShowStatusList) {
+    renderReportStatusList(root);
+    return;
+  }
   const options = reportVehicleOptions();
 
   if (!options.length) {
@@ -144,6 +156,7 @@ function renderReportView() {
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === reportSelectedYear && m.month === reportSelectedMonth ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
           </select>
           ${isAdminUnlocked() ? `
+            <button class="btn btn-ghost" type="button" id="reportStatusListBtn">提出状況一覧</button>
             <button class="btn btn-primary" type="button" id="reportPrintBtn">印刷／PDF</button>
           ` : ''}
         </div>
@@ -247,6 +260,14 @@ function renderReportView() {
   });
   const reportPrintBtnEl = document.getElementById('reportPrintBtn');
   if (reportPrintBtnEl) reportPrintBtnEl.addEventListener('click', () => window.print());
+  const reportStatusListBtnEl = document.getElementById('reportStatusListBtn');
+  if (reportStatusListBtnEl) {
+    reportStatusListBtnEl.addEventListener('click', () => {
+      reportShowStatusList = true;
+      reportStatusListData = undefined;
+      renderReportView();
+    });
+  }
   const issuerConfirmBtnEl = document.getElementById('issuerConfirmBtn');
   if (issuerConfirmBtnEl) {
     issuerConfirmBtnEl.addEventListener('click', () => {
@@ -333,6 +354,84 @@ function renderReportView() {
     if (field === 'driver' && value) pushRecentDriver(value);
     if (reportAlcoholErrorCells.size) reportAlcoholErrorCells = findAlcoholErrorCells(savedRecord);
     renderReportView();
+  });
+}
+
+// 管理者向け:全車両分の当月提出状況を一覧表示する。
+function renderReportStatusList(root) {
+  const year = reportSelectedYear || new Date().getFullYear();
+  const month = reportSelectedMonth || (new Date().getMonth() + 1);
+  const monthOptions = Array.from(recentMonthOptions(year, month).values())
+    .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+
+  if (reportStatusListData === undefined) {
+    fetchSubmissionStatusForMonth(year, month).then((map) => {
+      reportStatusListData = map;
+      if (reportShowStatusList) renderReportView();
+    });
+  }
+
+  const vehicles = sortVehiclesByOffice(loadVehicles().filter((v) => v.active !== false));
+  const rows = vehicles.map((v) => {
+    const status = reportStatusListData instanceof Map ? reportStatusListData.get(v.id) : null;
+    let label, cls;
+    if (!status || !status.issuerConfirmedAt) {
+      label = '未提出'; cls = 'status-pending';
+    } else if (!status.safetyManagerConfirmedAt) {
+      label = `提出済み(承認待ち)　${formatShortDate(status.issuerConfirmedAt)}`; cls = 'status-submitted';
+    } else {
+      label = `承認済み　${formatShortDate(status.safetyManagerConfirmedAt)}　${escapeHtml(status.safetyManagerName || '')}`; cls = 'status-approved';
+    }
+    const vehicleLabel = v.vehicleType === 'private'
+      ? `${v.plateNumber}（${v.nickname ? `${v.nickname}・私有車` : '私有車'}）`
+      : `${v.plateNumber}（${v.nickname || '車種未設定'}）`;
+    return `
+      <tr class="status-list-row" data-vehicle-ref="${escapeHtml(v.id)}">
+        <td>${escapeHtml(v.officeName || '')}</td>
+        <td>${escapeHtml(vehicleLabel)}</td>
+        <td class="${cls}">${label}</td>
+      </tr>
+    `;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="panel no-print">
+      <div class="panel-head">
+        <h2>提出状況一覧</h2>
+        <div class="panel-actions">
+          <select class="input-sm" id="reportStatusMonthSelect">
+            ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === year && m.month === month ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost" type="button" id="reportStatusListBackBtn">月報表示に戻る</button>
+        </div>
+      </div>
+      ${reportStatusListData === undefined ? '<p class="hint">読み込み中…</p>' : ''}
+      ${reportStatusListData === null ? '<p class="status error">取得に失敗しました。通信状況を確認してください</p>' : ''}
+      <table class="report-table status-list-table">
+        <thead><tr><th>事業所名</th><th>車両</th><th>提出状況</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3">車両が登録されていません</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById('reportStatusMonthSelect').addEventListener('change', (e) => {
+    const [y, m] = e.target.value.split('-').map(Number);
+    reportSelectedYear = y; reportSelectedMonth = m;
+    reportStatusListData = undefined;
+    renderReportView();
+  });
+  document.getElementById('reportStatusListBackBtn').addEventListener('click', () => {
+    reportShowStatusList = false;
+    renderReportView();
+  });
+  root.querySelectorAll('.status-list-row').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      reportSelectedRef = tr.dataset.vehicleRef;
+      reportShowStatusList = false;
+      reportAlcoholErrorCells = new Set();
+      reportSafetyManagerNameDraft = '';
+      renderReportView();
+    });
   });
 }
 
