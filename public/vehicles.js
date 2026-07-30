@@ -238,6 +238,7 @@ function qrPanelHtml(state) {
         </div>
       </div>
       <div class="qr-print-area">
+        <p class="qr-instruction">運転月報App用QRコードを読取、運転記録を入力してください</p>
         <p class="qr-vehicle-label">${escapeHtml(vehicle.plateNumber)}${vehicle.nickname ? `(${escapeHtml(vehicle.nickname)})` : ''}</p>
         <div class="qr-image">${svg}</div>
         <p class="qr-url hint no-print">${url}</p>

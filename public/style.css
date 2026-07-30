@@ -319,6 +319,7 @@ input[type="date"].input-lg {
 .totals-table .num-cell { font-weight: bold; text-align: center; }
 
 .qr-panel { text-align: center; }
+.qr-instruction { font-size: 0.9rem; color: var(--muted); margin: 0.5rem 0 0; }
 .qr-vehicle-label { font-size: 1.1rem; font-weight: bold; margin: 0.5rem 0; }
 .qr-image { display: flex; justify-content: center; margin: 0.75rem 0; }
 .qr-url { word-break: break-all; }
