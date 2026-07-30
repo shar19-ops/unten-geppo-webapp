@@ -193,15 +193,28 @@ function setVehicleStatus(message, isError) {
   vehicleStatusIsError = !!isError;
 }
 
+// 一覧の状態バッジ。私有車の使用許可期限が過ぎている場合は使用中フラグより優先して
+// 「期限切れ(使用不可)」を表示する(運転記録入力の選択肢からも自動的に外れる)。
+function vehicleStatusBadge(v) {
+  if (isPermitExpired(v)) {
+    return { cls: 'badge-inactive', label: `期限切れ(使用不可)　〜${v.permitExpiryDate.replace(/-/g, '/')}` };
+  }
+  const expiryNote = (v.vehicleType === 'private' && v.permitExpiryDate) ? `(〜${v.permitExpiryDate.replace(/-/g, '/')})` : '';
+  return v.active !== false
+    ? { cls: 'badge-active', label: `使用中${expiryNote}` }
+    : { cls: 'badge-inactive', label: '停止中' };
+}
+
 function vehicleRow(v) {
   const id = escapeHtml(v.id);
+  const status = vehicleStatusBadge(v);
   return `
     <tr>
       <td>${escapeHtml(v.plateNumber)}</td>
       <td>${escapeHtml(v.nickname || '')}</td>
       <td>${escapeHtml(v.officeName || '')}</td>
       <td>${escapeHtml(vehicleManagerOf(v))}</td>
-      <td><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? '使用中' : '停止中'}</span></td>
+      <td><span class="badge ${status.cls}">${escapeHtml(status.label)}</span></td>
       <td class="row-actions">
         <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${id}">QRコード</button>
         <button class="btn btn-text vehicle-edit-btn" type="button" data-id="${id}">編集</button>
@@ -256,6 +269,13 @@ function vehicleFormHtml(v) {
         <label>車両管理者${isPrivate ? '(必須)' : ''}</label>
         <input type="text" class="input-lg" name="vehicleManager" value="${escapeHtml(vehicleManagerOf(v))}" ${isPrivate ? 'required' : ''}>
       </div>
+      ${isPrivate ? `
+        <div class="field">
+          <label>使用許可期限</label>
+          <input type="date" class="input-lg" name="permitExpiryDate" value="${escapeHtml(v.permitExpiryDate || '')}">
+          <p class="hint">期限を過ぎると自動的に運転記録の車両選択に表示されなくなります。延長する場合はここで新しい期限を入力して保存してください(QRコードのURLは変わりません)。</p>
+        </div>
+      ` : ''}
       <div class="field">
         <label class="toggle-label"><input type="checkbox" name="active" ${v.active !== false ? 'checked' : ''}> 使用中</label>
       </div>
@@ -293,7 +313,8 @@ async function onVehicleFormSubmit(e) {
     nickname: String(fd.get('nickname') || '').trim(),
     officeName: String(fd.get('officeName') || ''),
     vehicleManager,
-    active: fd.get('active') === 'on'
+    active: fd.get('active') === 'on',
+    permitExpiryDate: vehicleType === 'private' ? String(fd.get('permitExpiryDate') || '').trim() : ''
   };
   const result = await pushVehicleToCloud(vehicle);
   if (!result.ok) {
@@ -314,6 +335,14 @@ function findColumnValue(row, patterns) {
   return key ? String(row[key]).trim() : '';
 }
 
+// シート内で「車両番号」列を含む最初の行を見出し行とみなす(タイトル行が上に
+// 何行あってもそこを飛ばして正しく読めるようにする)。見つからなければ1行目を使う。
+function findVehicleHeaderRowIndex(ws) {
+  const rows2d = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const idx = rows2d.findIndex((row) => row.some((cell) => /車両番号/.test(String(cell))));
+  return idx === -1 ? 0 : idx;
+}
+
 function onVehicleExcelSelected(e) {
   const file = e.target.files[0];
   e.target.value = '';
@@ -324,7 +353,8 @@ function onVehicleExcelSelected(e) {
     try {
       const wb = XLSX.read(reader.result, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const headerRowIndex = findVehicleHeaderRowIndex(ws);
+      const rows = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
       const seenPlates = new Set();
       const importedList = [];
       rows.forEach((row) => {

@@ -36,6 +36,16 @@ function vehicleManagerOf(v) {
   return v.vehicleManager ?? v.defaultManager ?? v.driverName ?? '';
 }
 
+// 私有車の使用許可期限が過ぎているか(社有車・未設定は常にfalse)。
+function isPermitExpired(v) {
+  return v.vehicleType === 'private' && !!v.permitExpiryDate && v.permitExpiryDate < todayIso();
+}
+
+// 運転記録・給油記録の車両選択に出してよいか(使用中フラグ かつ 許可期限切れでない)。
+function isVehicleUsable(v) {
+  return v.active !== false && !isPermitExpired(v);
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'

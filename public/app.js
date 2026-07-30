@@ -257,8 +257,29 @@ if (window.caches) {
 // 読み取り、運転記録入力へ車両自動選択で遷移する)
 const QR_VEHICLE_LOCK_KEY = 'ug_qr_vehicle_id';
 
+// 私有車の使用許可期限が1週間以内に迫っている場合、アプリを開いた人に一度だけ知らせる
+// (端末のlocalStorageに車両ID+期限日付で記録する。期限を延長すると日付が変わるため、
+// 新しい期限に対してまた1度だけ警告できるようになる)。
+function checkPermitExpiryWarnings() {
+  const today = todayIso();
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 7);
+  const soonIso = soon.toISOString().slice(0, 10);
+
+  loadVehicles()
+    .filter((v) => v.vehicleType === 'private' && v.active !== false && v.permitExpiryDate
+      && v.permitExpiryDate >= today && v.permitExpiryDate <= soonIso)
+    .forEach((v) => {
+      const key = `ug_permit_warned_${v.id}_${v.permitExpiryDate}`;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+      alert(`${v.plateNumber}（${v.nickname || '私有車'}）の使用許可期限が${v.permitExpiryDate.replace(/-/g, '/')}に迫っています。期限内に更新・延長の手続きをお願いします。`);
+    });
+}
+
 async function bootstrapApp() {
   await syncVehiclesFromCloud();
+  checkPermitExpiryWarnings();
   flushPendingLogSync();
 
   const params = new URLSearchParams(location.search);
@@ -277,7 +298,7 @@ async function bootstrapApp() {
   }
 
   if (qrVehicleId) {
-    const vehicles = loadVehicles().filter((v) => v.active !== false);
+    const vehicles = loadVehicles().filter(isVehicleUsable);
     const matched = vehicles.find((v) => v.id === qrVehicleId);
     if (matched) {
       tripUsePrivateCar = matched.vehicleType === 'private';
