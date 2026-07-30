@@ -117,7 +117,7 @@ function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
 }
 
 function tripFormHtml() {
-  const allVehicles = loadVehicles().filter((v) => v.active !== false);
+  const allVehicles = sortVehiclesByOffice(loadVehicles()).filter((v) => v.active !== false);
   const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
   const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
   const recentDrivers = loadRecentDrivers();
@@ -175,7 +175,7 @@ function tripFormHtml() {
 
 function fuelFormHtml() {
   const today = new Date().toISOString().slice(0, 10);
-  const allVehicles = loadVehicles().filter((v) => v.active !== false);
+  const allVehicles = sortVehiclesByOffice(loadVehicles()).filter((v) => v.active !== false);
   const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
   const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
 

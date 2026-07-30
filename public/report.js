@@ -26,7 +26,7 @@ function findAlcoholErrorCells(record) {
 }
 
 function reportVehicleOptions() {
-  const vehicles = loadVehicles().map((v) => ({
+  const vehicles = sortVehiclesByOffice(loadVehicles()).map((v) => ({
     ref: v.id,
     label: v.vehicleType === 'private'
       ? `${v.plateNumber}（${v.nickname ? `${v.nickname}・私有車` : '私有車'}）`
