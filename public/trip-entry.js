@@ -6,11 +6,24 @@ let tripStatusMessage = '';
 let tripStatusIsError = false;
 let tripPendingChecklists = []; // 保存直後に発生した点検イベントのキュー({listKey, headerNote, vehicleRef, year, month, day})
 let tripQrVehicleId = null; // QR経由で指定された車両ID(未指定/該当なしの場合はnull)
+let tripQrBlockedMessage = null; // QR対象車両が使用不可(期限切れ・停止中)のため入力自体をブロックしている場合の案内文
 let tripSelectedDate = todayIso(); // 運転記録入力欄で現在選択中の日付
 let tripSelectedVehicleId = null; // 運転記録入力欄で現在選択中の車両ID(未選択ならQRロック車両または一覧の先頭車両に従う)
 
 function renderTripEntryView() {
   const root = document.getElementById('view-trip-entry');
+
+  // QR対象の車両が使用不可の場合、他の車両を自由に選べる画面には落とさず、理由を
+  // 明示して入力そのものをブロックする(管理者モードのみ通常表示に進める例外)。
+  if (tripQrBlockedMessage && !isAdminUnlocked()) {
+    root.innerHTML = `
+      <div class="panel">
+        <h2>運転記録入力</h2>
+        <p class="status error">${escapeHtml(tripQrBlockedMessage)}</p>
+      </div>
+    `;
+    return;
+  }
 
   root.innerHTML = `
     ${tripPendingChecklists.length ? checklistPromptPanelHtml(tripPendingChecklists[0]) : ''}
