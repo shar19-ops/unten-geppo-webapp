@@ -266,29 +266,30 @@ function buildQrBlockedMessage(v) {
   return `${label}は${reason}のため使用できません。車両管理者にご連絡ください。`;
 }
 
-// 私有車の使用許可期限が1週間以内に迫っている場合、アプリを開いた人に一度だけ知らせる
-// (端末のlocalStorageに車両ID+期限日付で記録する。期限を延長すると日付が変わるため、
-// 新しい期限に対してまた1度だけ警告できるようになる)。
-function checkPermitExpiryWarnings() {
+// 私有車の使用許可期限が1週間以内に迫っている場合、その車両を実際に使おうとしている人にだけ
+// 一度知らせる(端末のlocalStorageに車両ID+期限日付で記録する。期限を延長すると日付が変わる
+// ため、新しい期限に対してまた1度だけ警告できるようになる)。
+// 全車両を毎回チェックすると無関係な車両の警告まで表示されてしまうため、呼び出し側は
+// 「今まさに使おうとしている車両ID」だけを渡すこと(運転記録入力画面から呼ばれる)。
+function checkPermitExpiryWarning(vehicleId) {
+  if (!vehicleId) return;
+  const v = loadVehicles().find((veh) => veh.id === vehicleId);
+  if (!v || v.vehicleType !== 'private' || v.active === false || !v.permitExpiryDate) return;
+
   const today = todayIso();
   const soon = new Date();
   soon.setDate(soon.getDate() + 7);
   const soonIso = soon.toISOString().slice(0, 10);
+  if (v.permitExpiryDate < today || v.permitExpiryDate > soonIso) return;
 
-  loadVehicles()
-    .filter((v) => v.vehicleType === 'private' && v.active !== false && v.permitExpiryDate
-      && v.permitExpiryDate >= today && v.permitExpiryDate <= soonIso)
-    .forEach((v) => {
-      const key = `ug_permit_warned_${v.id}_${v.permitExpiryDate}`;
-      if (localStorage.getItem(key)) return;
-      localStorage.setItem(key, '1');
-      alert(`${v.plateNumber}（${v.nickname || '私有車'}）の使用許可期限が${v.permitExpiryDate.replace(/-/g, '/')}に迫っています。期限内に更新・延長の手続きをお願いします。`);
-    });
+  const key = `ug_permit_warned_${v.id}_${v.permitExpiryDate}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, '1');
+  alert(`${v.plateNumber}（${v.nickname || '私有車'}）の使用許可期限が${v.permitExpiryDate.replace(/-/g, '/')}に迫っています。期限内に更新・延長の手続きをお願いします。`);
 }
 
 async function bootstrapApp() {
   await syncVehiclesFromCloud();
-  checkPermitExpiryWarnings();
   flushPendingLogSync();
 
   const params = new URLSearchParams(location.search);

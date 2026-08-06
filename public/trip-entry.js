@@ -137,6 +137,7 @@ function tripFormHtml() {
 
   const defaultVehicle = tripUsePrivateCar ? privateVehicles[0] : companyVehicles[0];
   const effectiveVehicleId = tripSelectedVehicleId || tripQrVehicleId || (defaultVehicle ? defaultVehicle.id : null);
+  checkPermitExpiryWarning(effectiveVehicleId);
   const existingDay = findExistingDayData(effectiveVehicleId, tripSelectedDate);
 
   return `
