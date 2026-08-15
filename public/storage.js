@@ -76,12 +76,82 @@ function saveVehicles(list) {
 
 // ---------------- 車両マスタのクラウド同期(Firebase Realtime Database) ----------------
 // Firebase SDKは使わず、素のfetch()のみで読み書きする(ビルド不要という既存方針に合わせる)。
-// ルールは{".read":true,".write":true}(全開放)の前提。DB URLの末尾にスラッシュは付けない。
+// ルールは"auth != null"(匿名認証必須)の前提。DB URLの末尾にスラッシュは付けない。
 const FIREBASE_DB_URL = 'https://unten-geppo-webapp-default-rtdb.firebaseio.com';
+
+// ---------------- Firebase匿名認証 ----------------
+// Firebase SDKは使わず、Identity Toolkit REST APIのみで匿名認証する(既存方針を維持)。
+// 一度サインインしたらリフレッシュトークンをlocalStorageへ保存して使い回し、毎回
+// 新しい匿名ユーザーを作らないようにする。IDトークンは1時間で失効するため、期限が
+// 近ければ同じリフレッシュトークンで更新する(このWeb APIキーはFirebaseの設計上、
+// 公開しても問題ない値。実際のアクセス制御はデータベース側のルールで行う)。
+const FIREBASE_API_KEY = 'AIzaSyDoZPZmb14J2Zu3WXgyD6A8eeSy1Nyz0_g';
+const FIREBASE_REFRESH_TOKEN_KEY = 'ug_firebase_refresh_token';
+
+let cachedIdToken = null;
+let cachedIdTokenExpiresAt = 0;
+let authTokenPromise = null; // 同時に複数箇所から呼ばれても通信を1回にまとめるための共有Promise
+
+async function signInAnonymously() {
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ returnSecureToken: true })
+  });
+  if (!res.ok) throw new Error('Firebase匿名サインインに失敗しました: ' + res.status);
+  const data = await res.json();
+  return { idToken: data.idToken, refreshToken: data.refreshToken, expiresIn: data.expiresIn };
+}
+
+async function refreshAuthToken(refreshToken) {
+  const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`
+  });
+  if (!res.ok) throw new Error('Firebaseトークン更新に失敗しました: ' + res.status);
+  const data = await res.json();
+  return { idToken: data.id_token, refreshToken: data.refresh_token, expiresIn: data.expires_in };
+}
+
+async function ensureAuthToken() {
+  const now = Date.now();
+  if (cachedIdToken && now < cachedIdTokenExpiresAt) return cachedIdToken;
+  if (authTokenPromise) return authTokenPromise;
+
+  authTokenPromise = (async () => {
+    const storedRefreshToken = localStorage.getItem(FIREBASE_REFRESH_TOKEN_KEY);
+    let result;
+    try {
+      result = storedRefreshToken ? await refreshAuthToken(storedRefreshToken) : await signInAnonymously();
+    } catch {
+      // 保存済みのリフレッシュトークンが無効化されている場合等は、新規サインインへフォールバックする
+      result = await signInAnonymously();
+    }
+    cachedIdToken = result.idToken;
+    cachedIdTokenExpiresAt = now + Number(result.expiresIn) * 1000 - 60000; // 60秒手前で期限切れ扱いにする
+    localStorage.setItem(FIREBASE_REFRESH_TOKEN_KEY, result.refreshToken);
+    return cachedIdToken;
+  })();
+
+  try {
+    return await authTokenPromise;
+  } finally {
+    authTokenPromise = null;
+  }
+}
+
+// Firebase Realtime DatabaseへのURLを認証トークン付きで組み立てて呼び出すヘルパー。
+// 以降のFirebase呼び出しは、直接fetchせず必ずこれ経由にする。
+async function firebaseFetch(path, options = {}) {
+  const token = await ensureAuthToken();
+  const sep = path.includes('?') ? '&' : '?';
+  return fetch(`${FIREBASE_DB_URL}${path}${sep}auth=${token}`, options);
+}
 
 async function syncVehiclesFromCloud() {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/vehicles.json`);
+    const res = await firebaseFetch('/vehicles.json');
     if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
     const data = await res.json();
     const list = data ? Object.values(data) : [];
@@ -100,7 +170,7 @@ async function pushVehicleToCloud(vehicle) {
     ? { ...list[idx], ...vehicle, updatedAt: now }
     : { ...vehicle, id: vehicle.id || generateId(), createdAt: now, updatedAt: now };
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/vehicles/${finalVehicle.id}.json`, {
+    const res = await firebaseFetch(`/vehicles/${finalVehicle.id}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(finalVehicle)
@@ -116,7 +186,7 @@ async function pushVehicleToCloud(vehicle) {
 
 async function deleteVehicleFromCloud(vehicleId) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/vehicles/${vehicleId}.json`, { method: 'DELETE' });
+    const res = await firebaseFetch(`/vehicles/${vehicleId}.json`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Firebase delete failed: ' + res.status);
   } catch {
     return { ok: false };
@@ -130,7 +200,7 @@ async function pushVehiclesToCloud(list) {
   const map = {};
   list.forEach((v) => { map[v.id] = v; });
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/vehicles.json`, {
+    const res = await firebaseFetch('/vehicles.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(map)
@@ -253,7 +323,7 @@ function buildMetaPayload(record) {
 
 async function pushLogDayToCloud(key, day, dayData) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}/days/${day}.json`, {
+    const res = await firebaseFetch(`/logs/${encodeURIComponent(key)}/days/${day}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dayData)
@@ -267,7 +337,7 @@ async function pushLogDayToCloud(key, day, dayData) {
 
 async function pushLogMetaToCloud(key, metaData) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}/meta.json`, {
+    const res = await firebaseFetch(`/logs/${encodeURIComponent(key)}/meta.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(metaData)
@@ -352,7 +422,7 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
   const key = monthlyLogKey(vehicleRef, year, month);
   let cloudData;
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/logs/${encodeURIComponent(key)}.json`);
+    const res = await firebaseFetch(`/logs/${encodeURIComponent(key)}.json`);
     if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
     cloudData = await res.json();
   } catch {
@@ -413,7 +483,7 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
 async function fetchSubmissionStatusForMonth(year, month) {
   const suffix = `_${year}_${month}`;
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/logs.json`);
+    const res = await firebaseFetch('/logs.json');
     if (!res.ok) throw new Error('Firebase read failed: ' + res.status);
     const data = await res.json();
     const map = new Map();
