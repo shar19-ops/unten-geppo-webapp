@@ -12,6 +12,11 @@ let reportSafetyManagerNameDraft = ''; // 安全運転管理者名の入力途�
 let reportShowStatusList = false; // 管理者向け「提出状況一覧」表示中か
 let reportStatusListData = undefined; // undefined=未取得、null=取得失敗、Map=取得成功
 let reportJustSubmitted = false; // 直前の「提出」操作が成功した直後かどうか
+let reportStatusListSelected = new Set(); // 提出状況一覧でチェックを入れた車両ID(一括印刷対象)
+let reportStatusListSelectedMonthKey = null; // 上記選択がどの年月時点のものか("year-month"。月切替時に選択をクリアする判定用)
+let reportBulkPrintActive = false; // 管理者向け「一括印刷／PDF」画面表示中か
+let reportBulkPrintReady = false; // 一括印刷対象車両分のクラウド同期が完了したか
+let reportBulkPrintSheets = []; // 同期完了後に組み立てた各車両分の帳票HTML
 
 // 提出時のバリデーション。出庫時メーター指針が入力されている日は、走行距離(自動計算)・
 // 行先・運転者・アルコールチェック2回がすべて入力されていることを要求する。あわせて、
@@ -81,8 +86,84 @@ function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
   return Array.from(map.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
+// 運転月報1台分の帳票HTML(2ページ分)を組み立てる。単一車両の運転月報画面と、
+// 管理者向けの一括印刷(複数車両分をまとめてこの関数で組み立てて連結する)の両方から使う。
+function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel) {
+  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
+  const holidays = computeJapaneseHolidays(record.year);
+  return `
+    <div class="report-sheet">
+      <div class="report-header">
+        <div class="report-header-cell">事業所名<br><strong>${escapeHtml(officeName)}</strong></div>
+        <div class="report-header-cell report-title">${record.year}年　${record.month}月　運転月報</div>
+        <div class="report-header-cell">
+          車両管理者：<strong>${escapeHtml(vehicleManager)}</strong><br>
+          車両番号：<strong>${escapeHtml(vehicleNumberLabel)}</strong>
+        </div>
+      </div>
+
+      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays)}
+      ${checklistBlock('点検日15日', record.checklistMid, 'checklistMid')}
+      <p class="print-page-number">1 / 2</p>
+      <div class="report-page2">
+        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays)}
+
+        <table class="report-table totals-table">
+          <tr>
+            <td class="label-cell">走行距離合計(km)</td><td class="num-cell distance-cell">${totals.totalDistance.toLocaleString()}</td>
+            <td class="label-cell fuel-economy-label">燃費＝走行距離合計／給油合計(km/L)</td><td class="num-cell">${totals.fuelEconomy}</td>
+            <td class="label-cell">給油合計(L)</td><td class="num-cell">${totals.totalFuel.toFixed(2)}</td>
+          </tr>
+        </table>
+
+        ${checklistBlock('点検日は月の末日', record.checklistEnd, 'checklistEnd')}
+        <table class="report-table print-stamp-table">
+          <colgroup>
+            <col style="width: 23mm;">
+            <col style="width: 23mm;">
+            <col style="width: 23mm;">
+          </colgroup>
+          <tr>
+            <th>安全運転<br>管理者</th>
+            <th>副安全運転<br>管理者</th>
+            <th>発行者</th>
+          </tr>
+          <tr>
+            <td>${record.safetyManagerConfirmedAt ? `${escapeHtml(formatShortDate(record.safetyManagerConfirmedAt))}<br>${escapeHtml(record.safetyManagerName || '')}` : ''}</td>
+            <td></td>
+            <td>${record.issuerConfirmedAt ? `${escapeHtml(formatShortDate(record.issuerConfirmedAt))}<br>${escapeHtml(surnameOf(vehicleManager))}` : ''}</td>
+          </tr>
+        </table>
+        <p class="print-page-number">2 / 2</p>
+      </div>
+    </div>
+  `;
+}
+
+// 管理者向け一括印刷用:登録済み車両1台・指定年月分のクラウド最新データを同期してから
+// 帳票HTMLを組み立てる(この端末に無い他車両分のデータもクラウドから取得するため)。
+async function syncAndBuildReportSheetForVehicle(vehicle, year, month) {
+  const vehicleRef = vehicle.id;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  await Promise.all([
+    syncMonthlyLogFromCloud(vehicleRef, year, month, { vehicleId: vehicle.id }),
+    syncMonthlyLogFromCloud(vehicleRef, nextYear, nextMonth, { vehicleId: vehicle.id })
+  ]);
+  const record = loadMonthlyLog(vehicleRef, year, month) || createEmptyMonthlyLog(vehicleRef, year, month, { vehicleId: vehicle.id });
+  const nextMonthRecord = loadMonthlyLog(vehicleRef, nextYear, nextMonth);
+  const nextMonthDays = nextMonthRecord ? nextMonthRecord.days : {};
+  const officeName = vehicle.officeName || '';
+  const vehicleManager = vehicleManagerOf(vehicle);
+  return buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicle.plateNumber || '');
+}
+
 function renderReportView() {
   const root = document.getElementById('view-report');
+  if (isAdminUnlocked() && reportBulkPrintActive) {
+    renderReportBulkPrint(root);
+    return;
+  }
   if (isAdminUnlocked() && reportShowStatusList) {
     renderReportStatusList(root);
     return;
@@ -215,51 +296,7 @@ function renderReportView() {
       ` : ''}
     </div>
 
-    <div class="report-sheet">
-      <div class="report-header">
-        <div class="report-header-cell">事業所名<br><strong>${escapeHtml(officeName)}</strong></div>
-        <div class="report-header-cell report-title">${record.year}年　${record.month}月　運転月報</div>
-        <div class="report-header-cell">
-          車両管理者：<strong>${escapeHtml(vehicleManager)}</strong><br>
-          車両番号：<strong>${escapeHtml(selectedOption.vehicleId ? (vehicle || {}).plateNumber || '' : (record.privateCarLabel || ''))}</strong>
-        </div>
-      </div>
-
-      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays)}
-      ${checklistBlock('点検日15日', record.checklistMid, 'checklistMid')}
-      <p class="print-page-number">1 / 2</p>
-      <div class="report-page2">
-        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays)}
-
-        <table class="report-table totals-table">
-          <tr>
-            <td class="label-cell">走行距離合計(km)</td><td class="num-cell distance-cell">${totals.totalDistance.toLocaleString()}</td>
-            <td class="label-cell fuel-economy-label">燃費＝走行距離合計／給油合計(km/L)</td><td class="num-cell">${totals.fuelEconomy}</td>
-            <td class="label-cell">給油合計(L)</td><td class="num-cell">${totals.totalFuel.toFixed(2)}</td>
-          </tr>
-        </table>
-
-        ${checklistBlock('点検日は月の末日', record.checklistEnd, 'checklistEnd')}
-        <table class="report-table print-stamp-table">
-          <colgroup>
-            <col style="width: 23mm;">
-            <col style="width: 23mm;">
-            <col style="width: 23mm;">
-          </colgroup>
-          <tr>
-            <th>安全運転<br>管理者</th>
-            <th>副安全運転<br>管理者</th>
-            <th>発行者</th>
-          </tr>
-          <tr>
-            <td>${record.safetyManagerConfirmedAt ? `${escapeHtml(formatShortDate(record.safetyManagerConfirmedAt))}<br>${escapeHtml(record.safetyManagerName || '')}` : ''}</td>
-            <td></td>
-            <td>${record.issuerConfirmedAt ? `${escapeHtml(formatShortDate(record.issuerConfirmedAt))}<br>${escapeHtml(surnameOf(vehicleManager))}` : ''}</td>
-          </tr>
-        </table>
-        <p class="print-page-number">2 / 2</p>
-      </div>
-    </div>
+    ${buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, selectedOption.vehicleId ? (vehicle || {}).plateNumber || '' : (record.privateCarLabel || ''))}
   `;
 
   const reportVehicleSelectEl = document.getElementById('reportVehicleSelect');
@@ -411,6 +448,13 @@ function renderReportStatusList(root) {
     });
   }
 
+  // 前回月から切り替わっていた場合、別の月の車両にチェックが残ったまま一括印刷に
+  // 進んでしまわないよう、選択状態をクリアする。
+  if (reportStatusListSelectedMonthKey !== `${year}-${month}`) {
+    reportStatusListSelectedMonthKey = `${year}-${month}`;
+    reportStatusListSelected = new Set();
+  }
+
   const vehicles = sortVehiclesByOffice(loadVehicles().filter((v) => v.active !== false));
   const rows = vehicles.map((v) => {
     const status = reportStatusListData instanceof Map ? reportStatusListData.get(v.id) : null;
@@ -427,12 +471,14 @@ function renderReportStatusList(root) {
       : `${v.plateNumber}（${v.nickname || '車種未設定'}）`;
     return `
       <tr class="status-list-row" data-vehicle-ref="${escapeHtml(v.id)}">
+        <td class="status-list-check-cell"><input type="checkbox" class="status-list-check" data-vehicle-ref="${escapeHtml(v.id)}" ${reportStatusListSelected.has(v.id) ? 'checked' : ''}></td>
         <td>${escapeHtml(v.officeName || '')}</td>
         <td>${escapeHtml(vehicleLabel)}</td>
         <td class="${cls}">${label}</td>
       </tr>
     `;
   }).join('');
+  const allChecked = vehicles.length > 0 && vehicles.every((v) => reportStatusListSelected.has(v.id));
 
   root.innerHTML = `
     <div class="panel no-print">
@@ -442,14 +488,15 @@ function renderReportStatusList(root) {
           <select class="input-sm" id="reportStatusMonthSelect">
             ${monthOptions.map((m) => `<option value="${m.year}-${m.month}" ${m.year === year && m.month === month ? 'selected' : ''}>${m.year}年${m.month}月</option>`).join('')}
           </select>
+          <button class="btn btn-primary" type="button" id="reportBulkPrintBtn" ${reportStatusListSelected.size === 0 ? 'disabled' : ''}>選択した車両を一括印刷／PDF(${reportStatusListSelected.size})</button>
           <button class="btn btn-ghost" type="button" id="reportStatusListBackBtn">月報表示に戻る</button>
         </div>
       </div>
       ${reportStatusListData === undefined ? '<p class="hint">読み込み中…</p>' : ''}
       ${reportStatusListData === null ? '<p class="status error">取得に失敗しました。通信状況を確認してください</p>' : ''}
       <table class="report-table status-list-table">
-        <thead><tr><th>事業所名</th><th>車両</th><th>提出状況</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="3">車両が登録されていません</td></tr>'}</tbody>
+        <thead><tr><th><input type="checkbox" id="reportStatusListSelectAll" ${allChecked ? 'checked' : ''}></th><th>事業所名</th><th>車両</th><th>提出状況</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4">車両が登録されていません</td></tr>'}</tbody>
       </table>
     </div>
   `;
@@ -464,6 +511,28 @@ function renderReportStatusList(root) {
     reportShowStatusList = false;
     renderReportView();
   });
+  const reportBulkPrintBtnEl = document.getElementById('reportBulkPrintBtn');
+  if (reportBulkPrintBtnEl) {
+    reportBulkPrintBtnEl.addEventListener('click', () => {
+      reportBulkPrintReady = false;
+      reportBulkPrintActive = true;
+      renderReportView();
+    });
+  }
+  document.getElementById('reportStatusListSelectAll').addEventListener('change', (e) => {
+    if (e.target.checked) vehicles.forEach((v) => reportStatusListSelected.add(v.id));
+    else vehicles.forEach((v) => reportStatusListSelected.delete(v.id));
+    renderReportView();
+  });
+  root.querySelectorAll('.status-list-check').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', (e) => {
+      const ref = e.target.dataset.vehicleRef;
+      if (e.target.checked) reportStatusListSelected.add(ref);
+      else reportStatusListSelected.delete(ref);
+      renderReportView();
+    });
+  });
   root.querySelectorAll('.status-list-row').forEach((tr) => {
     tr.addEventListener('click', () => {
       reportSelectedRef = tr.dataset.vehicleRef;
@@ -473,6 +542,50 @@ function renderReportStatusList(root) {
       renderReportView();
     });
   });
+}
+
+// 管理者向け:提出状況一覧でチェックした車両分の運転月報をまとめて表示し、1回の印刷操作で
+// 全台分をPDF化できるようにする。表示前に各車両のクラウド最新データを同期してから組み立てる。
+function renderReportBulkPrint(root) {
+  const year = reportSelectedYear;
+  const month = reportSelectedMonth;
+  const vehicles = sortVehiclesByOffice(loadVehicles().filter((v) => v.active !== false && reportStatusListSelected.has(v.id)));
+
+  if (!reportBulkPrintReady) {
+    root.innerHTML = `
+      <div class="panel no-print">
+        <h2>一括印刷／PDF</h2>
+        <p class="hint">選択した${vehicles.length}台分のデータを読み込んでいます…</p>
+      </div>
+    `;
+    Promise.all(vehicles.map((v) => syncAndBuildReportSheetForVehicle(v, year, month)))
+      .then((sheets) => {
+        reportBulkPrintReady = true;
+        reportBulkPrintSheets = sheets;
+        if (reportBulkPrintActive) renderReportView();
+      });
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="panel no-print">
+      <div class="panel-head">
+        <h2>一括印刷／PDF(${vehicles.length}台・${year}年${month}月)</h2>
+        <div class="panel-actions">
+          <button class="btn btn-ghost" type="button" id="reportBulkPrintBackBtn">一覧に戻る</button>
+          <button class="btn btn-primary" type="button" id="reportBulkPrintGoBtn" ${vehicles.length === 0 ? 'disabled' : ''}>印刷／PDF</button>
+        </div>
+      </div>
+    </div>
+    ${reportBulkPrintSheets.join('')}
+  `;
+
+  document.getElementById('reportBulkPrintBackBtn').addEventListener('click', () => {
+    reportBulkPrintActive = false;
+    renderReportView();
+  });
+  const reportBulkPrintGoBtnEl = document.getElementById('reportBulkPrintGoBtn');
+  if (reportBulkPrintGoBtnEl) reportBulkPrintGoBtnEl.addEventListener('click', () => window.print());
 }
 
 function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays) {

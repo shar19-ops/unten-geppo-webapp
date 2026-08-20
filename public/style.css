@@ -346,6 +346,8 @@ input[type="date"].input-lg {
   .report-table th, .report-table td { padding: 0.15rem 0.4rem; }
   .report-header { font-size: 9.5pt; }
   .report-page2 { break-before: page; page-break-before: always; }
+  /* 一括印刷: 2台目以降の車両ごとに新しいページから始める */
+  .report-sheet + .report-sheet { break-before: page; page-break-before: always; }
   .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.2rem; }
   .print-stamp-table th:nth-child(1), .print-stamp-table td:nth-child(1),
   .print-stamp-table th:nth-child(2), .print-stamp-table td:nth-child(2) {
