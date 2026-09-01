@@ -262,7 +262,7 @@ function tripFormHtml() {
 
       <div class="field">
         <label>行先</label>
-        <input type="text" name="destination" class="input-lg" placeholder="例: 本社 → A社" value="${escapeHtml(existingDay ? existingDay.destination || '' : '')}">
+        <input type="text" name="destination" class="input-lg" placeholder="例: 自宅 → 本店" value="${escapeHtml(existingDay ? existingDay.destination || '' : '')}">
       </div>
 
       <div class="field">

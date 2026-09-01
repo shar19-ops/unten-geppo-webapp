@@ -88,9 +88,14 @@ function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
 
 // 運転月報1台分の帳票HTML(2ページ分)を組み立てる。単一車両の運転月報画面と、
 // 管理者向けの一括印刷(複数車両分をまとめてこの関数で組み立てて連結する)の両方から使う。
-function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel) {
+// 給油伝票の照合印(fuelSlipChecked)は管理者が任意で付ける欄。列そのものは誰が見ても
+// 同じ帳票になるよう常に出し、チェックの操作だけを管理者モードに限定する(印刷結果が
+// 見る人によって変わらないようにするため)。一括印刷画面は保存処理を持たないので、
+// そちらからはfuelSlipEditable:falseで読み取り専用にする。
+function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel, options = {}) {
   const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
   const holidays = computeJapaneseHolidays(record.year);
+  const canCheckFuelSlip = options.fuelSlipEditable !== false && isAdminUnlocked();
   return `
     <div class="report-sheet">
       <div class="report-header">
@@ -102,11 +107,11 @@ function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager,
         </div>
       </div>
 
-      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays)}
+      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip)}
       ${checklistBlock('点検日15日', record.checklistMid, 'checklistMid')}
       <p class="print-page-number">1 / 2</p>
       <div class="report-page2">
-        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays)}
+        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip)}
 
         <table class="report-table totals-table">
           <tr>
@@ -155,7 +160,7 @@ async function syncAndBuildReportSheetForVehicle(vehicle, year, month) {
   const nextMonthDays = nextMonthRecord ? nextMonthRecord.days : {};
   const officeName = vehicle.officeName || '';
   const vehicleManager = vehicleManagerOf(vehicle);
-  return buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicle.plateNumber || '');
+  return buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicle.plateNumber || '', { fuelSlipEditable: false });
 }
 
 function renderReportView() {
@@ -412,7 +417,16 @@ function renderReportView() {
       const day = Number(input.dataset.day);
       const field = input.dataset.field;
       const numericFields = ['meterReading', 'alcoholCheckBefore', 'alcoholCheckAfter', 'fuelAdded'];
-      const value = numericFields.includes(field) ? parseNumberOrNull(input.value) : String(input.value || '').trim();
+      let value;
+      if (input.type === 'checkbox') {
+        // 給油伝票の照合印。外した状態はnullではなくfalseで保存する(Firebaseは値がnullの
+        // キーをPUT時に削除してしまい、チェックを外したことが他端末へ伝わらないため)。
+        value = input.checked;
+      } else if (numericFields.includes(field)) {
+        value = parseNumberOrNull(input.value);
+      } else {
+        value = String(input.value || '').trim();
+      }
       const savedRecord = saveTripDay(reportSelectedRef, record.year, record.month, day, { [field]: value }, { vehicleId: record.vehicleId, privateCarLabel: record.privateCarLabel });
       syncLogDayToCloud(savedRecord.key, day, savedRecord.days[day]);
       if (field === 'driver' && value) pushRecentDriver(value);
@@ -640,7 +654,7 @@ function fitReportCellText(target, widthScale = 1) {
   });
 }
 
-function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays) {
+function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays, canCheckFuelSlip) {
   const rows = [];
   for (let d = startDay; d <= endDay; d++) {
     const day = days[d] || {};
@@ -661,6 +675,7 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
         <td class="num-cell ${beforeErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckBefore" value="${day.alcoholCheckBefore != null ? day.alcoholCheckBefore : ''}"></td>
         <td class="num-cell ${afterErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="alcoholCheckAfter" value="${day.alcoholCheckAfter != null ? day.alcoholCheckAfter : ''}"></td>
         <td class="num-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="fuelAdded" value="${day.fuelAdded != null ? day.fuelAdded : ''}"></td>
+        <td class="fuel-check-cell"><input type="checkbox" class="cell-check no-print" data-day="${d}" data-field="fuelSlipChecked"${day.fuelSlipChecked ? ' checked' : ''}${canCheckFuelSlip ? '' : ' disabled'}><span class="cell-check-print">${day.fuelSlipChecked ? '✓' : ''}</span></td>
       </tr>
     `);
   }
@@ -676,6 +691,7 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
           <th>ｱﾙｺｰﾙCK<br>始業前</th>
           <th>ｱﾙｺｰﾙCK<br>終業後</th>
           <th>給油<br>ℓ</th>
+          <th class="fuel-check-cell">給油伝票<br>照合</th>
         </tr>
       </thead>
       <tbody>${rows.join('')}</tbody>
