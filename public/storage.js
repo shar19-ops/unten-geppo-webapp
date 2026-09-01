@@ -52,8 +52,18 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+// 日付は必ずローカル(端末のタイムゾーン)基準で組み立てる。toISOString()はUTCを返すため、
+// JST(UTC+9)では毎日00:00〜08:59の間だけ前日の日付になり、朝の出庫時にQRを読むと
+// 前日が選ばれてしまっていた。
+function isoDateOf(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return isoDateOf(new Date());
 }
 
 function vehicleRefFor(vehicleId, privateCarLabel) {
