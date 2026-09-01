@@ -267,7 +267,7 @@ input[type="date"].input-lg {
 .num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* 給油伝票の照合印。画面ではチェックボックス、印刷では✓だけを出す
    (チェックボックスの枠はブラウザによって印刷時の見え方が揃わないため) */
-.fuel-check-cell { width: 4.6rem; white-space: nowrap; }
+.fuel-check-cell { width: 2.6rem; white-space: nowrap; }
 .report-table td input.cell-check { width: 16px; height: 16px; margin: 0; vertical-align: middle; cursor: pointer; }
 .report-table td input.cell-check:disabled { cursor: default; opacity: 0.4; }
 .cell-check-print { display: none; }

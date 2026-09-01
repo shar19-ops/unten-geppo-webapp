@@ -685,13 +685,13 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
         <tr>
           <th>日付</th>
           <th class="meter-cell">出庫時メーター指針<br>km</th>
-          <th class="distance-cell">走行距離<br>km</th>
+          <th class="distance-cell">走行<br>距離<br>km</th>
           <th class="dest-cell">行先</th>
           <th>運転者</th>
           <th>ｱﾙｺｰﾙCK<br>始業前</th>
           <th>ｱﾙｺｰﾙCK<br>終業後</th>
           <th>給油<br>ℓ</th>
-          <th class="fuel-check-cell">給油伝票<br>照合</th>
+          <th class="fuel-check-cell">給油<br>伝票<br>照合</th>
         </tr>
       </thead>
       <tbody>${rows.join('')}</tbody>
