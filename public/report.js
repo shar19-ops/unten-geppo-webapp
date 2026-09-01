@@ -432,6 +432,13 @@ function renderReportView() {
       renderReportView();
     }
   });
+
+  // 入力の途中でも収まり具合は変わるので、描画直後と1文字ごとの入力で合わせ直す。
+  document.querySelector('.report-sheet').addEventListener('input', (e) => {
+    const input = e.target.closest('input.cell-input');
+    if (input) fitReportCellText(input);
+  });
+  fitReportCellText();
 }
 
 // 管理者向け:全車両分の当月提出状況を一覧表示する。
@@ -586,6 +593,51 @@ function renderReportBulkPrint(root) {
   });
   const reportBulkPrintGoBtnEl = document.getElementById('reportBulkPrintGoBtn');
   if (reportBulkPrintGoBtnEl) reportBulkPrintGoBtnEl.addEventListener('click', () => window.print());
+  fitReportCellText();
+}
+
+// 行先・運転者は「1日1車両=1行」のまま追記していく運用のため、日によっては列幅に
+// 収まらないことがある。溢れたセルだけ、セル幅に収まるところまで文字サイズを自動で
+// 縮める(下限あり)。指定はem(=そのセルが継承している文字サイズに対する比率)なので、
+// 画面(.report-table 0.8rem)と印刷(9.5pt)のどちらでもそれぞれの基準に対して効く。
+const REPORT_CELL_MIN_FONT_SCALE = 0.5;
+let reportCellMeasureCanvas = null;
+
+// input要素はscrollWidthが実際の文字幅を返さないブラウザがあるため、canvasで実測する。
+function measureReportCellTextWidth(text, el) {
+  if (!reportCellMeasureCanvas) reportCellMeasureCanvas = document.createElement('canvas');
+  const ctx = reportCellMeasureCanvas.getContext('2d');
+  const cs = getComputedStyle(el);
+  ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return ctx.measureText(text).width;
+}
+
+// 印刷はA4縦・左右余白13mm/8mm(@page)なので、実際に表が載る幅は画面より狭い。
+// 画面の列幅そのままで判定すると印刷時だけ溢れるため、印刷直前は「印刷時の表幅 /
+// 画面上の表幅」を掛けて厳しめに判定する。
+const PRINT_CONTENT_WIDTH_PX = (210 - 13 - 8) / 25.4 * 96;
+
+function reportPrintWidthScale() {
+  const table = document.querySelector('.report-table');
+  if (!table || !table.clientWidth) return 1;
+  return Math.min(1, PRINT_CONTENT_WIDTH_PX / table.clientWidth);
+}
+
+// targetを渡せばそのセルだけ、省略すれば全セルの文字サイズを合わせ直す。
+// widthScaleは印刷時に列幅が狭くなる分の補正(画面表示時は1)。
+function fitReportCellText(target, widthScale = 1) {
+  const inputs = target ? [target] : Array.from(document.querySelectorAll('.report-table input.cell-input'));
+  inputs.forEach((el) => {
+    el.style.fontSize = ''; // 基準サイズに戻してから測り直す(前回の縮小を引きずらない)
+    const text = el.value || '';
+    if (!text) return;
+    const available = el.clientWidth * widthScale - 1; // 端がぎりぎり切れないよう1px余裕を見る
+    if (available <= 0) return;
+    const needed = measureReportCellTextWidth(text, el);
+    if (needed <= available) return;
+    const scale = Math.max(REPORT_CELL_MIN_FONT_SCALE, available / needed);
+    el.style.fontSize = `${scale.toFixed(3)}em`;
+  });
 }
 
 function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays) {
@@ -671,3 +723,13 @@ function checklistBlock(headerNote, items, listKey) {
     </table>
   `;
 }
+
+// 印刷時は用紙幅に合わせて厳しめに縮め、印刷が終わったら画面用に戻す。
+// 画面幅が変われば列幅も変わるため、リサイズ後にも合わせ直す。
+window.addEventListener('beforeprint', () => fitReportCellText(null, reportPrintWidthScale()));
+window.addEventListener('afterprint', () => fitReportCellText());
+let reportCellFitResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(reportCellFitResizeTimer);
+  reportCellFitResizeTimer = setTimeout(() => fitReportCellText(), 150);
+});
