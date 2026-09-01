@@ -395,7 +395,9 @@ function notifyIssuerOfMonthEndChecklist(record) {
 
 // ---------------- 通常の運転記録入力 ----------------
 function parseNumberOrNull(value) {
-  const trimmed = String(value || '').trim();
+  // 運転月報のメーター指針は桁区切り付きで表示する(例: 15,000)ため、数値に戻す際は
+  // カンマを取り除く。他の数値欄でカンマが混ざっても同様に読めるようにしておく。
+  const trimmed = String(value || '').replace(/[,，]/g, '').trim();
   if (trimmed === '') return null;
   const n = Number(trimmed);
   return Number.isFinite(n) ? n : null;

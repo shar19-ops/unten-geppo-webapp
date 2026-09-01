@@ -668,7 +668,7 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
     rows.push(`
       <tr>
         <td class="day-cell ${colorClass}">${d}</td>
-        <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading : ''}"></td>
+        <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading.toLocaleString() : ''}"></td>
         <td class="num-cell distance-cell ${distanceErrorClass}">${distance !== '' ? distance.toLocaleString() : ''}</td>
         <td class="dest-cell ${destErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="destination" value="${escapeHtml(day.destination || '')}"></td>
         <td class="driver-cell ${driverErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="driver" value="${escapeHtml(day.driver || '')}"></td>
