@@ -268,6 +268,10 @@ input[type="date"].input-lg {
 /* 給油伝票の照合印。画面ではチェックボックス、印刷では✓だけを出す
    (チェックボックスの枠はブラウザによって印刷時の見え方が揃わないため) */
 .fuel-check-cell { width: 2.6rem; white-space: nowrap; }
+/* 見出しは改行位置を<br>で指定し、途中で勝手に折り返さないようにする
+   (日本語は既定でどこでも改行されるため、「始業前」が「始業/前」に割れてしまう) */
+.report-table th.alcohol-cell,
+.report-table th.fuel-cell { white-space: nowrap; }
 .report-table td input.cell-check { width: 16px; height: 16px; margin: 0; vertical-align: middle; cursor: pointer; }
 .report-table td input.cell-check:disabled { cursor: default; opacity: 0.4; }
 .cell-check-print { display: none; }
@@ -348,7 +352,9 @@ input[type="date"].input-lg {
   main { padding: 0; max-width: none; }
   .view { display: none; }
   .view.active { display: block; }
-  .report-sheet { border: none; padding: 0; }
+  /* 帳票の右端がページの印字境界にちょうど接すると、.report-headerの1px右枠線が
+     境界上で描かれて印刷に乗らない。印刷時だけ1mm内側に寄せて確実に収める。 */
+  .report-sheet { border: none; padding: 0 1mm 0 0; }
   .report-table { font-size: 9.5pt; }
   .report-table th, .report-table td { padding: 0.15rem 0.4rem; }
   .report-header { font-size: 9.5pt; }
