@@ -40,7 +40,11 @@ async function showView(name) {
     await syncVehiclesFromCloud();
     renderVehiclesView();
   }
-  if (name === 'trip-entry') renderTripEntryView();
+  if (name === 'trip-entry') {
+    // タブを開き直すたびにクラウドから取り直させる(他の人が入力した分を拾うため)
+    tripSyncedLogKey = null;
+    renderTripEntryView();
+  }
   if (name === 'report') {
     // タブを開くたび(既に開いている状態からの再クリックも含む)にクラウドから
     // 最新の月報データを取り直させるため、直近の同期済みキーの記録をリセットする。

@@ -9,9 +9,12 @@ let tripQrVehicleId = null; // QR経由で指定された車両ID(未指定/該�
 let tripQrBlockedMessage = null; // QR対象車両が使用不可(期限切れ・停止中)のため入力自体をブロックしている場合の案内文
 let tripSelectedDate = todayIso(); // 運転記録入力欄で現在選択中の日付
 let tripSelectedVehicleId = null; // 運転記録入力欄で現在選択中の車両ID(未選択ならQRロック車両または一覧の先頭車両に従う)
+let tripSyncedLogKey = null; // 直近にクラウドから取り直した月報キー(車両×年月)。同じ組み合わせの再取得を防ぐ
+let tripFormDirty = false; // 入力欄に手を入れたか(クラウド反映で入力中の内容を消さないための判定)
 
 function renderTripEntryView() {
   const root = document.getElementById('view-trip-entry');
+  tripFormDirty = false; // 画面を組み直すので「入力中」の状態も一度リセットする
 
   // QR対象の車両が使用不可の場合、他の車両を自由に選べる画面には落とさず、理由を
   // 明示して入力そのものをブロックする(管理者モードのみ通常表示に進める例外)。
@@ -71,6 +74,9 @@ function renderTripEntryView() {
         renderTripEntryView();
       });
     }
+    setupTripAppendHelpers();
+    // 他の人・他の端末で入力済みの内容を入力欄へ出すため、クラウドから取り直す
+    ensureTripLogSynced(effectiveTripVehicleId(), tripSelectedDate);
   } else {
     document.getElementById('fuelEntryForm').addEventListener('submit', onFuelEntrySubmit);
   }
@@ -93,6 +99,103 @@ function findExistingDayData(vehicleId, dateStr) {
   const record = loadMonthlyLog(vehicleRef, year, month);
   const dayData = record && record.days && record.days[day];
   return dayHasData(dayData) ? dayData : null;
+}
+
+// 現在の選択(手動選択 > QR指定 > 一覧の先頭)から、入力対象の車両IDを決める。
+// tripFormHtmlとクラウド同期の双方が同じ車両を見るよう、判定を1か所にまとめている。
+function effectiveTripVehicleId() {
+  const allVehicles = sortVehiclesByOffice(loadVehicles()).filter(isVehicleUsable);
+  const candidates = tripUsePrivateCar
+    ? allVehicles.filter((v) => v.vehicleType === 'private')
+    : allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
+  return tripSelectedVehicleId || tripQrVehicleId || (candidates[0] ? candidates[0].id : null);
+}
+
+// 選択中の「車両 × 日付」の月報をクラウドから取り直す。
+// 運転記録入力画面はこの端末のlocalStorageしか見ていなかったため、同じ日に別の人・
+// 別の端末で入力された内容が入力欄に出ず、そのまま保存すると1日1レコードの仕様上
+// 相手の行先・運転者を丸ごと上書きしてしまっていた。運転月報画面と同じ
+// syncMonthlyLogFromCloudでマージしてから入力欄へ反映する。
+async function ensureTripLogSynced(vehicleId, dateStr) {
+  if (!vehicleId || !dateStr) return;
+  const [year, month] = dateStr.split('-').map(Number);
+  if (!year || !month) return;
+  const vehicleRef = vehicleRefFor(vehicleId, null);
+  const key = monthlyLogKey(vehicleRef, year, month);
+  if (tripSyncedLogKey === key) return; // 同じ車両・同じ月なら取得済み
+  tripSyncedLogKey = key;
+
+  const merged = await syncMonthlyLogFromCloud(vehicleRef, year, month, { vehicleId });
+  if (!merged) return; // 取得失敗、またはクラウド側に新しい内容が無ければ現状のまま
+  if (tripSyncedLogKey !== key) return; // 待っている間に車両・日付が変わっていたら破棄する
+  if (document.body.dataset.view !== 'trip-entry' || tripEntryMode !== 'trip') return;
+  if (tripFormDirty) {
+    // 既に入力し始めている場合は勝手に貼り替えず、読み込むかどうかを本人に選んでもらう
+    showTripCloudUpdateNotice();
+    return;
+  }
+  renderTripEntryView();
+}
+
+// 入力中にクラウド側の更新を見つけた場合の案内。入力途中の内容を消さないよう、
+// 反映は「最新の内容を読み込む」を押した時だけ行う。
+function showTripCloudUpdateNotice() {
+  const form = document.getElementById('tripEntryForm');
+  if (!form || document.getElementById('tripCloudUpdateNotice')) return;
+  const heading = form.querySelector('h2');
+  if (!heading) return;
+
+  const notice = document.createElement('p');
+  notice.id = 'tripCloudUpdateNotice';
+  notice.className = 'status error';
+  notice.textContent = 'この日の記録が他の端末で更新されました。';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-ghost btn-inline';
+  btn.textContent = '最新の内容を読み込む';
+  btn.addEventListener('click', () => {
+    tripSyncedLogKey = null; // 押された時は改めて取り直す
+    renderTripEntryView();
+  });
+
+  notice.appendChild(btn);
+  heading.insertAdjacentElement('afterend', notice);
+}
+
+// 既存の行先へ「追記」しやすくするための補助。入力に手が入ったことを覚えておき
+// (クラウド反映で入力中の内容を消さないため)、行先欄を最初にタップした時だけ
+// カーソルを末尾へ送って、既に入っている行先の後ろから続けて書けるようにする。
+function setupTripAppendHelpers() {
+  const form = document.getElementById('tripEntryForm');
+  if (!form) return;
+  form.addEventListener('input', () => { tripFormDirty = true; });
+
+  const destInput = form.querySelector('input[name="destination"]');
+  if (!destInput || !destInput.value) return;
+  destInput.addEventListener('focus', function moveCaretToEnd() {
+    destInput.removeEventListener('focus', moveCaretToEnd);
+    const end = destInput.value.length;
+    // iOS Safariはfocus直後だと選択位置が戻されるため、1tick遅らせて末尾へ送る
+    setTimeout(() => { try { destInput.setSelectionRange(end, end); } catch {} }, 0);
+  });
+}
+
+// 「いつ入力されたか」は同じ日に複数回記入する運用で効くので、日付だけでなく時刻も出す。
+function formatUpdatedAtLabel(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// 既に入力済みの日に、誰がいつ入力したかを添えて案内する。同じ日に行先が複数ある場合は
+// 行を増やさず既存の内容へ追記してもらう運用なので、その旨も文言に含める。
+function existingDayHintText(existingDay) {
+  const who = existingDay.updatedBy ? `${escapeHtml(existingDay.updatedBy)}さんが` : '';
+  const when = formatUpdatedAtLabel(existingDay.updatedAt);
+  const stamp = (who || when) ? `（${who}${when ? `${when}に` : ''}入力）` : '';
+  return `この日は既に入力済みです${stamp}。行は増やさず、下の内容に追記・修正して保存してください。`;
 }
 
 function vehicleSelectFieldHtml(companyVehicles, privateVehicles) {
@@ -135,8 +238,7 @@ function tripFormHtml() {
   const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
   const recentDrivers = loadRecentDrivers();
 
-  const defaultVehicle = tripUsePrivateCar ? privateVehicles[0] : companyVehicles[0];
-  const effectiveVehicleId = tripSelectedVehicleId || tripQrVehicleId || (defaultVehicle ? defaultVehicle.id : null);
+  const effectiveVehicleId = effectiveTripVehicleId();
   checkPermitExpiryWarning(effectiveVehicleId);
   const existingDay = findExistingDayData(effectiveVehicleId, tripSelectedDate);
 
@@ -144,7 +246,7 @@ function tripFormHtml() {
     <form class="entry-form panel" id="tripEntryForm">
       <h2>運転記録入力</h2>
 
-      ${existingDay ? '<p class="hint">この日は既に入力済みです。内容を修正して保存できます</p>' : ''}
+      ${existingDay ? `<p class="hint entry-existing-hint">${existingDayHintText(existingDay)}</p>` : ''}
 
       ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
 
