@@ -231,7 +231,10 @@ function loadMonthlyLog(vehicleRef, year, month) {
 function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
   const days = {};
   for (let d = 1; d <= 31; d++) {
-    days[d] = { meterReading: null, destination: '', driver: '', alcoholCheckBefore: null, alcoholCheckAfter: null, fuelAdded: null, updatedAt: null, updatedBy: null };
+    // fuelSlipChecked(給油伝票の照合印)はnullではなくfalseを初期値にする。Firebaseは
+    // PUT時に値がnullのキーを丸ごと削除するため、nullだと「チェックを外した」状態が
+    // 他端末へ伝わらない(値の無いキー=未設定と区別が付かない)。
+    days[d] = { meterReading: null, destination: '', driver: '', alcoholCheckBefore: null, alcoholCheckAfter: null, fuelAdded: null, fuelSlipChecked: false, updatedAt: null, updatedBy: null };
   }
   return {
     key: monthlyLogKey(vehicleRef, year, month),

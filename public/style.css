@@ -265,6 +265,12 @@ input[type="date"].input-lg {
    th/td込みで詳細度を揃えて左寄せを確実に効かせる */
 .report-table td.dest-cell { text-align: left; text-indent: 1em; }
 .num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 給油伝票の照合印。画面ではチェックボックス、印刷では✓だけを出す
+   (チェックボックスの枠はブラウザによって印刷時の見え方が揃わないため) */
+.fuel-check-cell { width: 4.6rem; white-space: nowrap; }
+.report-table td input.cell-check { width: 16px; height: 16px; margin: 0; vertical-align: middle; cursor: pointer; }
+.report-table td input.cell-check:disabled { cursor: default; opacity: 0.4; }
+.cell-check-print { display: none; }
 
 .report-table td input.cell-input {
   width: 100%; border: none; background: transparent; text-align: inherit;
@@ -350,6 +356,7 @@ input[type="date"].input-lg {
   /* 一括印刷: 2台目以降の車両ごとに新しいページから始める */
   .report-sheet + .report-sheet { break-before: page; page-break-before: always; }
   .print-page-number { display: block; text-align: center; font-size: 0.8rem; margin-top: 0.2rem; }
+  .cell-check-print { display: inline; }
   .print-stamp-table th:nth-child(1), .print-stamp-table td:nth-child(1),
   .print-stamp-table th:nth-child(2), .print-stamp-table td:nth-child(2) {
     display: table-cell;
