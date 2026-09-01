@@ -668,7 +668,7 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
     rows.push(`
       <tr>
         <td class="day-cell ${colorClass}">${d}</td>
-        <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading : ''}"></td>
+        <td class="num-cell meter-cell"><input type="text" inputmode="decimal" class="cell-input" data-day="${d}" data-field="meterReading" value="${day.meterReading != null ? day.meterReading.toLocaleString() : ''}"></td>
         <td class="num-cell distance-cell ${distanceErrorClass}">${distance !== '' ? distance.toLocaleString() : ''}</td>
         <td class="dest-cell ${destErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="destination" value="${escapeHtml(day.destination || '')}"></td>
         <td class="driver-cell ${driverErrorClass}"><input type="text" class="cell-input" data-day="${d}" data-field="driver" value="${escapeHtml(day.driver || '')}"></td>
@@ -685,13 +685,13 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
         <tr>
           <th>日付</th>
           <th class="meter-cell">出庫時メーター指針<br>km</th>
-          <th class="distance-cell">走行距離<br>km</th>
+          <th class="distance-cell">走行<br>距離<br>km</th>
           <th class="dest-cell">行先</th>
           <th>運転者</th>
-          <th>ｱﾙｺｰﾙCK<br>始業前</th>
-          <th>ｱﾙｺｰﾙCK<br>終業後</th>
-          <th>給油<br>ℓ</th>
-          <th class="fuel-check-cell">給油伝票<br>照合</th>
+          <th class="alcohol-cell">ｱﾙｺｰﾙ<br>CK<br>始業前</th>
+          <th class="alcohol-cell">ｱﾙｺｰﾙ<br>CK<br>終業後</th>
+          <th class="fuel-cell">給油<br>ℓ</th>
+          <th class="fuel-check-cell">給油<br>伝票<br>照合</th>
         </tr>
       </thead>
       <tbody>${rows.join('')}</tbody>
