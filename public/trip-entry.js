@@ -290,7 +290,7 @@ function tripFormHtml() {
 }
 
 function fuelFormHtml() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const allVehicles = sortVehiclesByOffice(loadVehicles()).filter(isVehicleUsable);
   const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
   const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');

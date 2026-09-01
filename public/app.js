@@ -283,7 +283,7 @@ function checkPermitExpiryWarning(vehicleId) {
   const today = todayIso();
   const soon = new Date();
   soon.setDate(soon.getDate() + 7);
-  const soonIso = soon.toISOString().slice(0, 10);
+  const soonIso = isoDateOf(soon);
   if (v.permitExpiryDate < today || v.permitExpiryDate > soonIso) return;
 
   const key = `ug_permit_warned_${v.id}_${v.permitExpiryDate}`;
