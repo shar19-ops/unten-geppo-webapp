@@ -394,11 +394,18 @@ function renderReportView() {
   if (safetyRejectBtnEl) {
     safetyRejectBtnEl.addEventListener('click', () => {
       if (!confirm('差し戻します。車両管理者は再度「提出」が必要になります。よろしいですか?')) return;
+      // 宛先は車両マスタに登録された車両管理者のメールアドレス。未登録なら従来どおり
+      // 宛先空欄で開き、メールソフト側で手入力してもらう。
+      const to = vehicleManagerEmailOf(vehicle);
+      const reportLink = record.vehicleId
+        ? `${location.origin}${location.pathname}?reportVehicle=${encodeURIComponent(record.vehicleId)}&reportYear=${record.year}&reportMonth=${record.month}`
+        : `${location.origin}${location.pathname}`;
       const subject = '運転月報の再提出依頼';
       const body = '運転月報の提出ありがとうございます。\n' +
         '提出いただきました運転月報ですが、内容に不備がありますので、見直しをして再提出をお願いいたします。\n' +
-        '安全品質保証部';
-      location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        '安全品質保証部\n\n' +
+        '対象の運転月報:\n' + reportLink;
+      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
       record.issuerConfirmedAt = ''; // nullにするとFirebase側でキーごと消えてしまい、他端末の
       // 古い確定値を上書きできなくなるため空文字を使う(storage.jsのcreateEmptyMonthlyLog参照)

@@ -36,6 +36,13 @@ function vehicleManagerOf(v) {
   return v.vehicleManager ?? v.defaultManager ?? v.driverName ?? '';
 }
 
+// 車両管理者のメールアドレス(差戻しメールの宛先・入力用URLの送付先に使う)。
+// 未登録は空文字。nullを使わないのは、Firebaseが値がnullのキーをPUT時に丸ごと
+// 削除してしまい、登録済みのアドレスを消しても他端末へ伝わらないため。
+function vehicleManagerEmailOf(v) {
+  return (v && v.managerEmail) || '';
+}
+
 // 私有車の使用許可期限が過ぎているか(社有車・未設定は常にfalse)。
 function isPermitExpired(v) {
   return v.vehicleType === 'private' && !!v.permitExpiryDate && v.permitExpiryDate < todayIso();
@@ -638,6 +645,14 @@ function mergeVehicles(localList, importedList) {
       byKey.set(key, added);
       return;
     }
+    // メールアドレスは「Excelへ出力 → 空欄を埋める → 取り込む」という後追いの
+    // 埋め方を想定しているため、競合として1台ずつ選ばせず、取込側に値があれば
+    // そのまま反映する。空欄は「指定なし」として既存の値を残す(消したい場合は
+    // 車両リストの編集画面で消す)。
+    if (iv.managerEmail && iv.managerEmail !== existing.managerEmail) {
+      existing.managerEmail = iv.managerEmail;
+    }
+
     const fieldsDiffer = existing.nickname !== iv.nickname
       || existing.officeName !== iv.officeName
       || existing.active !== iv.active
