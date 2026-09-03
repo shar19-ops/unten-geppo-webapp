@@ -1,0 +1,31 @@
+name: 運転月報の提出リマインド
+
+# 毎月3日 8:00(JST)に、前月分が未提出の車両管理者へ提出のお願いメールを送る。
+# 提出期限が毎月5日のため、2日前に案内する。cronはUTC指定なので前日23:00を指定する
+# (UTC 2日23:00 = JST 3日8:00。日本にサマータイムは無いので通年でずれない)。
+on:
+  schedule:
+    - cron: '0 23 2 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 送信せず対象の一覧だけ確認する
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 未提出の車両管理者へ提出依頼を送る
+        env:
+          REMINDER_WEBHOOK_URL: ${{ secrets.REMINDER_WEBHOOK_URL }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node scripts/submission-reminder.mjs
