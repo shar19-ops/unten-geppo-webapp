@@ -18,6 +18,10 @@ const APP_URL = 'https://shar19-ops.github.io/unten-geppo-webapp/';
 
 const DRY_RUN = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 const WEBHOOK_URL = process.env.REMINDER_WEBHOOK_URL || '';
+// テスト送信の宛先。指定すると、対象が何台あっても「1通だけ」このアドレスへ送る。
+// 本番は実在の車両管理者32名へ一斉に送るため、その前にPower Automate → Outlookの
+// 配信経路だけを安全に確かめられるようにしている。
+const TEST_TO = (process.env.TEST_TO || '').trim();
 
 // ---------------- 日付(JST固定) ----------------
 // 実行環境はUTCのため、toISOString()やgetMonth()をそのまま使うと日本時間と最大9時間ずれる
@@ -128,7 +132,12 @@ async function main() {
     return;
   }
 
-  const messages = targets.map((v) => buildMessage(v, report, sendMonth));
+  let messages = targets.map((v) => buildMessage(v, report, sendMonth));
+
+  if (TEST_TO) {
+    messages = messages.slice(0, 1).map((m) => ({ ...m, to: TEST_TO, subject: `【テスト送信】${m.subject}` }));
+    console.log(`テスト送信モード: ${TEST_TO} 宛に1通だけ送ります(本来の宛先には送りません)`);
+  }
 
   if (DRY_RUN) {
     console.log('\n--- DRY RUN(送信しません) ---');
