@@ -12,6 +12,10 @@ on:
         description: 送信せず対象の一覧だけ確認する
         type: boolean
         default: true
+      test_to:
+        description: テスト送信の宛先(入力すると、そのアドレスへ1通だけ送ります)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -28,4 +32,5 @@ jobs:
         env:
           REMINDER_WEBHOOK_URL: ${{ secrets.REMINDER_WEBHOOK_URL }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          TEST_TO: ${{ inputs.test_to }}
         run: node scripts/submission-reminder.mjs
