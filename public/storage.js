@@ -36,6 +36,13 @@ function vehicleManagerOf(v) {
   return v.vehicleManager ?? v.defaultManager ?? v.driverName ?? '';
 }
 
+// 車両管理者のメールアドレス(差戻しメールの宛先・入力用URLの送付先に使う)。
+// 未登録は空文字。nullを使わないのは、Firebaseが値がnullのキーをPUT時に丸ごと
+// 削除してしまい、登録済みのアドレスを消しても他端末へ伝わらないため。
+function vehicleManagerEmailOf(v) {
+  return (v && v.managerEmail) || '';
+}
+
 // 私有車の使用許可期限が過ぎているか(社有車・未設定は常にfalse)。
 function isPermitExpired(v) {
   return v.vehicleType === 'private' && !!v.permitExpiryDate && v.permitExpiryDate < todayIso();

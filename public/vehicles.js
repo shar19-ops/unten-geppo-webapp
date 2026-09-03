@@ -150,6 +150,21 @@ function renderVehiclesView() {
       }
       renderVehiclesView();
     });
+
+    // 入力用URLを車両管理者へメールで送る。宛先は車両マスタのメールアドレス
+    // (未登録なら宛先空欄で開き、メールソフト側で手入力してもらう)。
+    document.getElementById('qrMailUrlBtn').addEventListener('click', () => {
+      const v = vehicleQrState.vehicle;
+      const to = vehicleManagerEmailOf(v);
+      const label = `${v.plateNumber}${v.nickname ? `(${v.nickname})` : ''}`;
+      const subject = `【運転管理月報】${label} 運転記録入力用URL`;
+      const body = `${label}の運転記録入力用URLです。\n` +
+        'このURLを開くか、車両に貼付のQRコードを読み取って入力してください。\n\n' +
+        vehicleQrState.url;
+      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      if (!to) setVehicleStatus('この車両にはメールアドレスが未登録です。宛先は手入力してください', true);
+      renderVehiclesView();
+    });
     document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
     document.getElementById('qrReissueBtn').addEventListener('click', async () => {
       if (!confirm('再発行すると、今まで印刷済みのQRコードは使えなくなります。よろしいですか?')) return;
@@ -213,7 +228,12 @@ function vehicleRow(v) {
       <td>${escapeHtml(v.plateNumber)}</td>
       <td>${escapeHtml(v.nickname || '')}</td>
       <td>${escapeHtml(v.officeName || '')}</td>
-      <td>${escapeHtml(vehicleManagerOf(v))}</td>
+      <td>
+        ${escapeHtml(vehicleManagerOf(v))}
+        ${vehicleManagerEmailOf(v)
+          ? `<div class="cell-sub">${escapeHtml(vehicleManagerEmailOf(v))}</div>`
+          : '<div class="cell-sub cell-sub-missing">メール未登録</div>'}
+      </td>
       <td><span class="badge ${status.cls}">${escapeHtml(status.label)}</span></td>
       <td class="row-actions">
         <button class="btn btn-text vehicle-qr-btn" type="button" data-id="${id}">QRコード</button>
@@ -232,6 +252,7 @@ function qrPanelHtml(state) {
         <h2>QRコード: ${escapeHtml(vehicle.plateNumber)}</h2>
         <div class="panel-actions">
           <button class="btn btn-ghost" type="button" id="qrCopyUrlBtn">URLをコピー</button>
+          <button class="btn btn-ghost" type="button" id="qrMailUrlBtn">URLをメールで送る</button>
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
           <button class="btn btn-ghost" type="button" id="qrReissueBtn">QRコードを再発行</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
@@ -269,6 +290,11 @@ function vehicleFormHtml(v) {
       <div class="field">
         <label>車両管理者${isPrivate ? '(必須)' : ''}</label>
         <input type="text" class="input-lg" name="vehicleManager" value="${escapeHtml(vehicleManagerOf(v))}" ${isPrivate ? 'required' : ''}>
+      </div>
+      <div class="field">
+        <label>車両管理者のメールアドレス</label>
+        <input type="email" class="input-lg" name="managerEmail" value="${escapeHtml(vehicleManagerEmailOf(v))}" placeholder="example@yudensha.co.jp">
+        <p class="hint">差戻しメールの宛先と、運転記録入力用URLの送付先に使います。</p>
       </div>
       ${isPrivate ? `
         <div class="field">
@@ -314,6 +340,7 @@ async function onVehicleFormSubmit(e) {
     nickname: String(fd.get('nickname') || '').trim(),
     officeName: String(fd.get('officeName') || ''),
     vehicleManager,
+    managerEmail: String(fd.get('managerEmail') || '').trim(),
     active: fd.get('active') === 'on',
     permitExpiryDate: vehicleType === 'private' ? String(fd.get('permitExpiryDate') || '').trim() : ''
   };

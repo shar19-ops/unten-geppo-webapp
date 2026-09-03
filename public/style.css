@@ -170,6 +170,9 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .data-table tbody tr:nth-child(even) { background: var(--row-alt); }
 .row-actions { text-align: right; white-space: nowrap; }
 .badge { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; }
+/* 車両一覧で管理者名の下に添えるメールアドレス(未登録は控えめな警告色) */
+.cell-sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; word-break: break-all; }
+.cell-sub-missing { color: var(--danger); }
 .badge-active { background: #e3f7ea; color: var(--ok); }
 .badge-inactive { background: #f3f4f6; color: var(--muted); }
 
