@@ -390,7 +390,11 @@ function onVehicleExcelSelected(e) {
         if (!plateNumber) return;
         const nickname = findColumnValue(row, [/車種/, /車両名称/, /名称/]);
         const officeName = findColumnValue(row, [/事業所/]);
-        const entry = { plateNumber, nickname, officeName, vehicleType, active: true, vehicleManager: findColumnValue(row, [/管理者/, /使用者/]) };
+        const entry = {
+          plateNumber, nickname, officeName, vehicleType, active: true,
+          vehicleManager: findColumnValue(row, [/管理者/, /使用者/]),
+          managerEmail: findColumnValue(row, [/メール/, /mail/i])
+        };
         if (seenPlates.has(plateNumber)) {
           const idx = importedList.findIndex((v) => v.plateNumber === plateNumber);
           importedList[idx] = entry;
@@ -422,7 +426,9 @@ function exportVehiclesToExcel() {
     車種_名称: v.nickname || '',
     事業所名: v.officeName || '',
     車両管理者: vehicleManagerOf(v),
-    状態: v.active ? '使用中' : '停止中'
+    状態: v.active ? '使用中' : '停止中',
+    // メールアドレスは印刷時に外しやすいよう最後の列に置く
+    メールアドレス: vehicleManagerEmailOf(v)
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();

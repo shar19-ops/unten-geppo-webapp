@@ -645,6 +645,14 @@ function mergeVehicles(localList, importedList) {
       byKey.set(key, added);
       return;
     }
+    // メールアドレスは「Excelへ出力 → 空欄を埋める → 取り込む」という後追いの
+    // 埋め方を想定しているため、競合として1台ずつ選ばせず、取込側に値があれば
+    // そのまま反映する。空欄は「指定なし」として既存の値を残す(消したい場合は
+    // 車両リストの編集画面で消す)。
+    if (iv.managerEmail && iv.managerEmail !== existing.managerEmail) {
+      existing.managerEmail = iv.managerEmail;
+    }
+
     const fieldsDiffer = existing.nickname !== iv.nickname
       || existing.officeName !== iv.officeName
       || existing.active !== iv.active
