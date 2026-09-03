@@ -16,7 +16,9 @@ Power Automate(HTTPトリガー)
 
 アプリ本体は GitHub Pages 上の静的サイトでサーバーを持たないため、「月初に誰も開いていなくても動く主体」として GitHub Actions を使っています。メールの送信そのものは Power Automate 側で行います。
 
-**追加費用はかかりません。** GitHub Actions は public リポジトリなら無料、Power Automate の HTTP トリガーと Outlook 送信は標準コネクタです。
+> ⚠️ **この構成には Power Automate Premium ライセンスが必要です。**
+> Power Automate の「HTTP 要求の受信時」トリガーは **Premium 機能**で、**フローの所有者**にライセンスが要ります(呼び出す GitHub 側には不要)。ライセンスが無い場合、フローは保存できても実行できず、GitHub からの POST は **HTTP 401** で失敗します。
+> GitHub Actions 自体は public リポジトリなら無料です。
 
 ## 送られるメールの内容
 
