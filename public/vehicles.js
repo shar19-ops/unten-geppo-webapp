@@ -151,18 +151,48 @@ function renderVehiclesView() {
       renderVehiclesView();
     });
 
-    // 入力用URLを車両管理者へメールで送る。宛先は車両マスタのメールアドレス
-    // (未登録なら宛先空欄で開き、メールソフト側で手入力してもらう)。
-    document.getElementById('qrMailUrlBtn').addEventListener('click', () => {
+    document.getElementById('qrPdfBtn').addEventListener('click', async () => {
+      const v = vehicleQrState.vehicle;
+      try {
+        const pdf = await buildQrPdfBytes(v, vehicleQrState.url, vehicleQrState.qr);
+        downloadBytes(pdf, 'application/pdf', qrPdfFileName(v));
+        setVehicleStatus('QRコードのPDFを保存しました', false);
+      } catch {
+        setVehicleStatus('PDFを作成できませんでした', true);
+      }
+      renderVehiclesView();
+    });
+
+    // 入力用URLとQRコードのPDFを車両管理者へ送る。宛先は車両マスタのメールアドレス。
+    // mailto:には添付の仕組みが無いため、メール1通をそのまま.emlファイルとして書き出す。
+    // 開くと、宛先・件名・本文・PDFが入った送信前の下書きとしてメールソフトが立ち上がる。
+    document.getElementById('qrMailUrlBtn').addEventListener('click', async () => {
       const v = vehicleQrState.vehicle;
       const to = vehicleManagerEmailOf(v);
       const label = `${v.plateNumber}${v.nickname ? `(${v.nickname})` : ''}`;
-      const subject = `【運転管理月報】${label} 運転記録入力用URL`;
-      const body = `${label}の運転記録入力用URLです。\n` +
-        'このURLを開くか、車両に貼付のQRコードを読み取って入力してください。\n\n' +
-        vehicleQrState.url;
-      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      if (!to) setVehicleStatus('この車両にはメールアドレスが未登録です。宛先は手入力してください', true);
+      try {
+        const pdf = await buildQrPdfBytes(v, vehicleQrState.url, vehicleQrState.qr);
+        const eml = buildQrMailEml({
+          to,
+          subject: `【運転管理月報】${label} 運転記録入力用URL`,
+          body: [
+            `${label}の運転記録入力用URLです。`,
+            'このURLを開くか、車両に貼付のQRコードを読み取って入力してください。',
+            '',
+            vehicleQrState.url,
+            '',
+            '添付のPDFは車両に貼るためのQRコードです。印刷してお使いください。'
+          ].join('\r\n'),
+          pdfBytes: pdf,
+          pdfFileName: qrPdfFileName(v)
+        });
+        downloadBytes(utf8Bytes(eml), 'message/rfc822', `${label} 運転記録入力用URL.eml`);
+        setVehicleStatus(to
+          ? 'メールの下書きを保存しました。ファイルを開くと、宛先とQRコードのPDFが入った状態でメールソフトが開きます'
+          : 'この車両はメールアドレスが未登録です。下書きは保存しましたが、宛先は開いてから入力してください', !to);
+      } catch {
+        setVehicleStatus('メールの下書きを作成できませんでした', true);
+      }
       renderVehiclesView();
     });
     document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
@@ -214,7 +244,8 @@ function buildAndShowQr(vehicle) {
   const qr = qrcode(0, 'M');
   qr.addData(url);
   qr.make();
-  vehicleQrState = { vehicle, url, svg: qr.createSvgTag(6, 8) };
+  // qrはPDF書き出しでも使うため保持する(画像ではなく矩形で描き直すのに必要)
+  vehicleQrState = { vehicle, url, qr, svg: qr.createSvgTag(6, 8) };
   renderVehiclesView();
 }
 
@@ -267,7 +298,8 @@ function qrPanelHtml(state) {
         <h2>QRコード: ${escapeHtml(vehicle.plateNumber)}</h2>
         <div class="panel-actions">
           <button class="btn btn-ghost" type="button" id="qrCopyUrlBtn">URLをコピー</button>
-          <button class="btn btn-ghost" type="button" id="qrMailUrlBtn">URLをメールで送る</button>
+          <button class="btn btn-ghost" type="button" id="qrPdfBtn">PDFで保存</button>
+          <button class="btn btn-ghost" type="button" id="qrMailUrlBtn">メールで送る</button>
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
           <button class="btn btn-ghost btn-danger" type="button" id="qrReissueBtn">QRコードを再発行</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
