@@ -2,7 +2,6 @@
   "name": "運転管理月報",
   "short_name": "運転月報",
   "description": "社有車・私有車の運転記録入力、月報表示・印刷・Excel出力アプリ",
-  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f5f7",
