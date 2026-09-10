@@ -260,6 +260,11 @@ if (window.caches) {
 // アプリ起動処理: 車両マスタをFirebaseから同期してから、QRパラメータの解決・初期画面表示を行う
 // (社有車・私有車問わず?vehicle=<id>(旧方式)または?qrToken=<トークン>(再発行対応の新方式)を
 // 読み取り、運転記録入力へ車両自動選択で遷移する)
+
+// QRで選ばれた車両の固定。localStorageに置いているのは、QRを読んだ画面をブックマークして
+// 後日そこから開いたときも同じ車両に固定したままにするため(sessionStorageだとブラウザを
+// 閉じた時点で消え、他の車両を選べる状態に戻ってしまう)。別の車両のQRを読めばそちらへ
+// 切り替わり、管理者モードでは固定自体がかからない。
 const QR_VEHICLE_LOCK_KEY = 'ug_qr_vehicle_id';
 const QR_BLOCKED_VEHICLE_KEY = 'ug_qr_blocked_vehicle_id';
 
@@ -302,15 +307,15 @@ async function bootstrapApp() {
   const hasQrParam = !!(vehicleParam || qrToken);
 
   // URLに?vehicle=/?qrToken=が直接付いている場合は、そのパラメータだけで厳密に解決する
-  // (無効なトークンをsessionStorageの古いロックでこっそり救済しない)。付いていない場合
-  // (通常の更新)だけ、更新前にロックしていた車両・ブロック状態をこのタブの間だけ復元する。
+  // (無効なトークンを保存済みの古いロックでこっそり救済しない)。付いていない場合(通常の
+  // 更新・ブックマーク以外からの起動)だけ、前回ロックしていた車両・ブロック状態を復元する。
   let qrVehicleId;
   let qrBlockedVehicleId = null;
   if (hasQrParam) {
     qrVehicleId = vehicleParam || (loadVehicles().find((v) => v.qrToken === qrToken) || {}).id || null;
   } else {
-    qrVehicleId = sessionStorage.getItem(QR_VEHICLE_LOCK_KEY);
-    qrBlockedVehicleId = sessionStorage.getItem(QR_BLOCKED_VEHICLE_KEY);
+    qrVehicleId = localStorage.getItem(QR_VEHICLE_LOCK_KEY);
+    qrBlockedVehicleId = localStorage.getItem(QR_BLOCKED_VEHICLE_KEY);
   }
 
   if (qrVehicleId) {
@@ -319,20 +324,20 @@ async function bootstrapApp() {
     if (matched) {
       tripUsePrivateCar = matched.vehicleType === 'private';
       tripQrVehicleId = qrVehicleId;
-      sessionStorage.setItem(QR_VEHICLE_LOCK_KEY, qrVehicleId);
-      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
+      localStorage.setItem(QR_VEHICLE_LOCK_KEY, qrVehicleId);
+      localStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
     } else if (rawMatch) {
       // 車両自体は存在するが使用不可(期限切れ・停止中)。「見つかりませんでした」として
       // 開放的な車両選択画面に落とすと誰でも他の車両を選べてしまうため、そうはせず
       // 理由を明示して入力そのものをブロックする(管理者モードのみ例外的に通常表示へ)。
-      sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
-      sessionStorage.setItem(QR_BLOCKED_VEHICLE_KEY, qrVehicleId);
+      localStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+      localStorage.setItem(QR_BLOCKED_VEHICLE_KEY, qrVehicleId);
       tripQrBlockedMessage = buildQrBlockedMessage(rawMatch);
     } else {
-      sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
-      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
+      localStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+      localStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
       // URLに直接付いていたパラメータが無効だった場合のみエラー表示する
-      // (sessionStorage復元での失敗は静かに諦め、通常の選択画面に戻す)。
+      // (保存済みロックからの復元に失敗した場合は静かに諦め、通常の選択画面に戻す)。
       if (hasQrParam) {
         tripUsePrivateCar = false;
         tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
@@ -345,16 +350,18 @@ async function bootstrapApp() {
     if (rawMatch && !isVehicleUsable(rawMatch)) {
       tripQrBlockedMessage = buildQrBlockedMessage(rawMatch);
     } else {
-      sessionStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
+      localStorage.removeItem(QR_BLOCKED_VEHICLE_KEY);
     }
   } else if (hasQrParam) {
     // qrTokenがどの車両にも一致しなかった場合(再発行で無効化された旧トークン等)
-    sessionStorage.removeItem(QR_VEHICLE_LOCK_KEY);
+    localStorage.removeItem(QR_VEHICLE_LOCK_KEY);
     tripUsePrivateCar = false;
     tripStatusMessage = 'QRコードに対応する車両が見つかりませんでした。車両を選び直してください';
     tripStatusIsError = true;
   }
-  if (hasQrParam) history.replaceState(null, '', location.pathname);
+  // ?qrToken=はURLに残す。ここで消すと、QRを読んだ画面をブックマークしても保存されるのは
+  // トークンの無いURLになり、そこから開いたときに車両を固定できなくなるため
+  // (ブックマークがQRコードの代わりとして機能するようにしている)。
 
   // Teams通知のリンクから開いた場合、該当の車両・年月を選択した状態で
   // 運転月報を自動的に開く(発行者確認イベント用)。
