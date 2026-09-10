@@ -166,17 +166,32 @@ function renderVehiclesView() {
       renderVehiclesView();
     });
     document.getElementById('qrPrintBtn').addEventListener('click', () => window.print());
-    document.getElementById('qrReissueBtn').addEventListener('click', async () => {
-      if (!confirm('再発行すると、今まで印刷済みのQRコードは使えなくなります。よろしいですか?')) return;
-      const result = await pushVehicleToCloud({ id: vehicleQrState.vehicle.id, qrToken: generateId() });
-      if (!result.ok) {
-        setVehicleStatus('再発行できませんでした(通信エラー)', true);
-        renderVehiclesView();
-        return;
-      }
-      showToast('QRコードを再発行しました');
-      buildAndShowQr(result.vehicle);
+    // 再発行は取り消せない操作(押した時点で貼付済みのQRコードが無効になる)なので、
+    // このボタンでは実行せず、何が起きるかの注意書きを開くだけにしている。
+    document.getElementById('qrReissueBtn').addEventListener('click', () => {
+      vehicleQrState.reissueArmed = true;
+      renderVehiclesView();
+      // 注意書きは印刷用のQR画像より下に出るため、画面外だと気付かれない可能性がある。
+      const warn = document.getElementById('qrReissueWarn');
+      if (warn) warn.scrollIntoView({ block: 'nearest' });
     });
+    if (vehicleQrState.reissueArmed) {
+      document.getElementById('qrReissueCancelBtn').addEventListener('click', () => {
+        vehicleQrState.reissueArmed = false;
+        renderVehiclesView();
+      });
+      document.getElementById('qrReissueConfirmBtn').addEventListener('click', async () => {
+        const result = await pushVehicleToCloud({ id: vehicleQrState.vehicle.id, qrToken: generateId() });
+        if (!result.ok) {
+          setVehicleStatus('再発行できませんでした(通信エラー)', true);
+          renderVehiclesView();
+          return;
+        }
+        showToast('QRコードを再発行しました');
+        // vehicleQrStateを作り直すため、注意書きの表示状態もここで解除される。
+        buildAndShowQr(result.vehicle);
+      });
+    }
     document.getElementById('qrCloseBtn').addEventListener('click', () => {
       vehicleQrState = null;
       renderVehiclesView();
@@ -254,15 +269,36 @@ function qrPanelHtml(state) {
           <button class="btn btn-ghost" type="button" id="qrCopyUrlBtn">URLをコピー</button>
           <button class="btn btn-ghost" type="button" id="qrMailUrlBtn">URLをメールで送る</button>
           <button class="btn btn-ghost" type="button" id="qrPrintBtn">印刷</button>
-          <button class="btn btn-ghost" type="button" id="qrReissueBtn">QRコードを再発行</button>
+          <button class="btn btn-ghost btn-danger" type="button" id="qrReissueBtn">QRコードを再発行</button>
           <button class="btn btn-ghost" type="button" id="qrCloseBtn">閉じる</button>
         </div>
       </div>
+      ${state.reissueArmed ? qrReissueWarningHtml(vehicle) : ''}
       <div class="qr-print-area">
         <p class="qr-instruction">運転月報App用QRコードを読取、運転記録を入力してください</p>
         <p class="qr-vehicle-label">${escapeHtml(vehicle.plateNumber)}${vehicle.nickname ? `(${escapeHtml(vehicle.nickname)})` : ''}</p>
         <div class="qr-image">${svg}</div>
         <p class="qr-url hint no-print">${url}</p>
+      </div>
+    </div>
+  `;
+}
+
+// 「QRコードを再発行」を押したときに出す注意書き。ボタンが他の操作と同じ見た目で
+// 並んでいるため、誤って押しても即座には再発行されないよう、ここで一度止める。
+function qrReissueWarningHtml(vehicle) {
+  return `
+    <div class="qr-reissue-warn no-print" id="qrReissueWarn">
+      <h3>本当に再発行しますか?</h3>
+      <p>「${escapeHtml(vehicle.plateNumber)}」のQRコードを作り直します。<strong>元に戻せません。</strong></p>
+      <ul>
+        <li>車両に貼ってある<strong>今のQRコードは読み取れなくなります。</strong>印刷して貼り替えてください。</li>
+        <li>今までに配ったURLも使えなくなります。車両管理者へURLを送り直してください。</li>
+        <li>すでに入力済みの運転記録は消えません。</li>
+      </ul>
+      <div class="panel-actions">
+        <button class="btn" type="button" id="qrReissueCancelBtn">キャンセル</button>
+        <button class="btn btn-danger-solid" type="button" id="qrReissueConfirmBtn">再発行する</button>
       </div>
     </div>
   `;
