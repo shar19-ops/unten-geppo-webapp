@@ -1,3 +1,7 @@
 node_modules/
 *.log
 .playwright-mcp/
+# バックアップの書き出し先・復号後のファイル(個人情報を含む。publicリポジトリに絶対に入れない)
+backup/
+*.tar.gz
+*.tar.gz.enc
