@@ -1,0 +1,21 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "vehicles": {
+      ".read": "auth != null",
+      "$vehicleId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['plateNumber', 'id']) && newData.child('plateNumber').isString() && newData.child('plateNumber').val().length > 0 && newData.child('id').val() == $vehicleId"
+      }
+    },
+
+    "logs": {
+      ".read": "auth != null",
+      "$logKey": {
+        ".write": "auth != null && $logKey.matches(/^[^_]+_[0-9]{4}_[0-9]{1,2}$/)"
+      }
+    }
+  }
+}
