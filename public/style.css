@@ -390,6 +390,82 @@ input[type="date"].input-lg {
   }
 }
 
+/* --- 印刷用帳票(print-sheet.js)。社内書式アプリ Y-Format の本-安全-A0014 運転月報と同じ見た目 ---
+   画面では出さず、印刷では画面用の表(.report-sheet)の代わりにこちらを出す。
+   用紙の余白は帳票の中で取るので、名前付きページで余白0にする(車両QRの印刷の@pageはそのまま)。 */
+@page yformat { size: A4 portrait; margin: 0; }
+.print-sheet { display: none; }
+.print-sheet {
+  --ps-line: #333;
+  --ps-label-bg: #eef0f3;
+  font-family: "BIZ UDPGothic", "BIZ UDPゴシック", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 10pt;
+  color: #1a1a1a;
+}
+.ps-page {
+  page: yformat;
+  width: 210mm; height: 297mm; padding: 10mm 12mm 8mm; overflow: hidden;
+  display: flex; flex-direction: column;
+  break-after: page; page-break-after: always;
+}
+.ps-header { display: flex; align-items: flex-start; gap: 6mm; margin-bottom: 4mm; }
+.ps-head-left { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.ps-code { font-size: 8pt; color: #555; letter-spacing: .05em; }
+.ps-title {
+  font-size: 20pt; font-weight: bold; letter-spacing: .3em;
+  margin: 1mm 0 2mm; padding-bottom: 1.5mm;
+  border-bottom: 3px double var(--ps-line);
+  min-width: 70mm; white-space: nowrap;
+}
+.ps-sub { font-size: 9pt; margin-left: .5em; letter-spacing: 0; font-weight: normal; }
+.ps-meta { display: flex; align-items: baseline; gap: 2mm; font-size: 9.5pt; }
+.ps-m-label { color: #333; white-space: nowrap; }
+.ps-m-val { border-bottom: 1px solid var(--ps-line); min-width: 38mm; padding: 0 1mm; }
+.ps-stamps { display: flex; border: 1.2px solid var(--ps-line); flex-shrink: 0; }
+.ps-stamp-box { width: 20mm; display: flex; flex-direction: column; }
+.ps-stamp-box + .ps-stamp-box { border-left: 1px solid var(--ps-line); }
+.ps-sb-label {
+  height: 5mm; line-height: 5mm; text-align: center; font-size: 7.5pt; white-space: nowrap; overflow: hidden;
+  background: var(--ps-label-bg); border-bottom: 1px solid var(--ps-line); letter-spacing: .05em;
+}
+.ps-sb-label.ps-two { font-size: 6pt; line-height: 2.3mm; padding-top: .2mm; letter-spacing: 0; }
+.ps-sb-area { height: 20mm; display: flex; align-items: center; justify-content: center; }
+.ps-sb-area svg { width: 14.4mm; height: 14.4mm; display: block; }
+.ps-body { flex: 1; display: flex; flex-direction: column; gap: 4mm; }
+.ps-grid { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.2px solid var(--ps-line); }
+.ps-grid th, .ps-grid td {
+  border: 1px solid var(--ps-line); padding: 0 1.5mm; height: 5.5mm; vertical-align: middle;
+  font-weight: normal; font-size: 9pt; overflow: hidden; white-space: nowrap;
+}
+.ps-grid th, .ps-grid td.ps-lbl { background: var(--ps-label-bg); text-align: center; font-size: 8pt; padding: 0 1mm; line-height: 1.25; }
+.ps-grid th { white-space: normal; }
+.ps-info td { height: 7mm; }
+.ps-days thead th { height: 6mm; }
+.ps-days tbody td { height: 9mm; }
+.ps-c { text-align: center; }
+.ps-n { text-align: right; font-variant-numeric: tabular-nums; }
+.ps-t { text-align: left; }
+.ps-totals td { height: 7mm; }
+.ps-totals td.ps-lbl { white-space: normal; }
+.ps-unit { margin-left: 1.5mm; font-size: 8pt; }
+.ps-check td.ps-item { font-size: 8pt; }
+.ps-check td.ps-vertical { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: .1em; white-space: nowrap; padding: 1mm 0; }
+.ps-check td.ps-note { font-size: 8pt; color: #333; text-align: left; }
+.ps-footer {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-top: 4mm; padding-top: 2mm; border-top: 1px solid #9a9a9a;
+}
+.ps-brand { display: flex; align-items: center; gap: 3mm; }
+.ps-mark { height: 6.5mm; }
+.ps-word { font-family: "Montserrat", "Segoe UI", Arial, sans-serif; font-weight: 800; font-size: 12.5pt; letter-spacing: .07em; color: #1f3f8f; line-height: 1; }
+.ps-ver { font-size: 7.5pt; color: #666; }
+@media print {
+  .report-sheet { display: none !important; }
+  .print-sheet { display: block; }
+  .print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #view-report .panel { display: none; }
+}
+
 /* --- 管理者パスワード保護(車両リスト) --- */
 .admin-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
 .admin-toggle input { width: 18px; height: 18px; }

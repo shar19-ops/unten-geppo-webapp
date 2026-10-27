@@ -86,7 +86,8 @@ function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
   return Array.from(map.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
-// 運転月報1台分の帳票HTML(2ページ分)を組み立てる。単一車両の運転月報画面と、
+// 運転月報1台分の帳票HTML(2ページ分)を組み立てる。印刷では、この画面用の表の代わりに
+// 後ろに付けた印刷用帳票(print-sheet.js、Y-Format の本-安全-A0014 と同じ見た目)を出す。単一車両の運転月報画面と、
 // 管理者向けの一括印刷(複数車両分をまとめてこの関数で組み立てて連結する)の両方から使う。
 // 給油伝票の照合印(fuelSlipChecked)は管理者が任意で付ける欄。列そのものは誰が見ても
 // 同じ帳票になるよう常に出し、チェックの操作だけを管理者モードに限定する(印刷結果が
@@ -142,6 +143,7 @@ function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager,
         <p class="print-page-number">2 / 2</p>
       </div>
     </div>
+    ${buildPrintSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel)}
   `;
 }
 
