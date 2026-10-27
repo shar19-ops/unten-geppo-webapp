@@ -99,7 +99,7 @@ function printDaysHtml(record, nextMonthDays, startDay, endDay, holidays) {
       </tr>`);
   }
   const head1 = PRINT_DAY_COLUMNS.map((c, i) => {
-    if (c.group) return i === PRINT_DAY_COLUMNS.findIndex((x) => x.group) ? '<th colspan="2">アルコール検知値(mg/ℓ)</th>' : '';
+    if (c.group) return i === PRINT_DAY_COLUMNS.findIndex((x) => x.group) ? '<th colspan="2">アルコール検知値<br>(mg/ℓ)</th>' : '';
     return `<th rowspan="2">${c.label}</th>`;
   }).join('');
   const head2 = PRINT_DAY_COLUMNS.filter((c) => c.group).map((c) => `<th>${c.label}</th>`).join('');
