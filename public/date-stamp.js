@@ -14,6 +14,11 @@
 
   function toYMD(date) {
     if (date instanceof Date) return { y: date.getFullYear(), m: date.getMonth() + 1, d: date.getDate() };
+    // 'YYYY-MM-DD'(日付入力欄の値)。new Date()に渡すとUTC扱いで前日になることがあるため自前で分解する
+    if (typeof date === 'string') {
+      var p = date.split('-').map(Number);
+      if (p.length === 3 && p.every(function (n) { return !isNaN(n); })) return { y: p[0], m: p[1], d: p[2] };
+    }
     if (date && typeof date === 'object') return { y: date.year, m: date.month, d: date.day };
     var now = new Date();
     return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };

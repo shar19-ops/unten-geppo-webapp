@@ -479,6 +479,21 @@ input[type="date"].input-lg {
   #view-report .panel { display: none; }
 }
 
+/* --- 発行者の押印(運転月報) --- */
+.issuer-stamp-panel {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.9rem 1rem; margin-top: 0.75rem; background: var(--bg);
+}
+.issuer-stamp-fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem; align-items: end;
+}
+.issuer-stamp-preview { display: flex; align-items: center; justify-content: center; min-height: 64px; }
+.issuer-stamp-preview svg { width: 60px; height: 60px; }
+/* 画面の押印欄も、印刷と同じ丸型デート印で見せる */
+.print-stamp-table td.issuer-stamp-cell { padding: 1mm; }
+.print-stamp-table td.issuer-stamp-cell svg { width: 16mm; height: 16mm; display: block; margin: 0 auto; }
+
 /* --- 管理者パスワード保護(車両リスト) --- */
 .admin-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
 .admin-toggle input { width: 18px; height: 18px; }

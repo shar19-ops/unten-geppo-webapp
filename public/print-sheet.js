@@ -24,6 +24,14 @@ const PRINT_DAY_COLUMNS = [
   { key: 'slip', label: '伝票<br>照合', w: 9 }
 ];
 
+// 押印に付ける役職。伝票アプリ(juchu-touroku-webapp)と同じ一覧・同じ色分けにしている
+// (工事長以上は朱色)。役職なしのときは苗字を上下に分けた印になる。
+const STAMP_TITLES = ['', '副長', '課長', '工事長', '支店長', '部長', '本部長', '取締役', '常務', '本店長'];
+const STAMP_TITLE_COLOR = {
+  '': 'black', '副長': 'black', '課長': 'black',
+  '工事長': 'red', '支店長': 'red', '部長': 'red', '本部長': 'red', '取締役': 'red', '常務': 'red', '本店長': 'red'
+};
+
 let printMeasureCanvas = null;
 // 長い行先・運転者は、欄の幅に収まるところまで文字を小さくする(下限は元の半分)
 function printFitStyle(text, widthMm, basePt) {
@@ -41,6 +49,16 @@ function printStampSvg(name, iso) {
   if (!iso || typeof DateStamp === 'undefined') return '';
   const d = new Date(iso);
   return DateStamp.svg({ name: surnameOf(name), date: d, color: 'red' });
+}
+
+// 発行者の押印。伝票アプリと同じで、役職があれば上段に苗字・下段に役職を入れ、
+// 無ければ苗字を上下に分ける。色も役職で決まる(工事長以上は朱色)。
+function issuerStampSvg(record) {
+  if (!record.issuerStampName || !record.issuerStampDate || typeof DateStamp === 'undefined') return '';
+  const title = record.issuerStampTitle || '';
+  const name = { [title ? 'nameTop' : 'name']: record.issuerStampName };
+  if (title) name.nameBottom = title;
+  return DateStamp.svg({ ...name, date: record.issuerStampDate, color: STAMP_TITLE_COLOR[title] || 'black' });
 }
 
 function printHeaderHtml(record, page, stampCells) {
@@ -147,7 +165,8 @@ function buildPrintSheetHtml(record, nextMonthDays, officeName, vehicleManager, 
   const stampCells = [
     { label: '安全運転<br>管理者', svg: record.safetyManagerConfirmedAt ? printStampSvg(record.safetyManagerName, record.safetyManagerConfirmedAt) : '' },
     { label: '副安全運転<br>管理者', svg: '' },
-    { label: '発行者', svg: record.issuerConfirmedAt ? printStampSvg(vehicleManager, record.issuerConfirmedAt) : '' }
+    // 発行者は提出(issuerConfirmedAt)ではなく、画面で押した押印そのものを出す
+    { label: '発行者', svg: issuerStampSvg(record) }
   ];
   return `
     <div class="print-sheet">

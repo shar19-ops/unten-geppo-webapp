@@ -276,6 +276,11 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     issuerConfirmedAt: '',
     safetyManagerConfirmedAt: '',
     safetyManagerName: '',
+    // 発行者の押印。提出(issuerConfirmedAt)とは別で、押した分だけ帳票に印が出る。
+    // 未押印は空文字にする(上と同じ理由。nullだとFirebaseがキーごと消すため)。
+    issuerStampName: '',
+    issuerStampTitle: '',
+    issuerStampDate: '',
     metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
@@ -343,6 +348,9 @@ function buildMetaPayload(record) {
     issuerConfirmedAt: record.issuerConfirmedAt,
     safetyManagerConfirmedAt: record.safetyManagerConfirmedAt,
     safetyManagerName: record.safetyManagerName,
+    issuerStampName: record.issuerStampName || '',
+    issuerStampTitle: record.issuerStampTitle || '',
+    issuerStampDate: record.issuerStampDate || '',
     updatedAt: record.metaUpdatedAt
   };
 }
@@ -489,6 +497,9 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
       local.issuerConfirmedAt = adoptCloud(cloudMeta.issuerConfirmedAt, local.issuerConfirmedAt);
       local.safetyManagerConfirmedAt = adoptCloud(cloudMeta.safetyManagerConfirmedAt, local.safetyManagerConfirmedAt);
       local.safetyManagerName = adoptCloud(cloudMeta.safetyManagerName, local.safetyManagerName);
+      local.issuerStampName = adoptCloud(cloudMeta.issuerStampName, local.issuerStampName);
+      local.issuerStampTitle = adoptCloud(cloudMeta.issuerStampTitle, local.issuerStampTitle);
+      local.issuerStampDate = adoptCloud(cloudMeta.issuerStampDate, local.issuerStampDate);
       local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }
