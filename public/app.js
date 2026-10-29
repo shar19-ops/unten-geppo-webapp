@@ -46,6 +46,10 @@ async function showView(name) {
     renderTripEntryView();
   }
   if (name === 'report') {
+    // 印刷用帳票のフッターで使う書体を先に読んでおく。帳票は画面では display:none で、
+    // ブラウザは表示されるまでフォントを読みに行かない。印刷の直前に読み始めると
+    // 間に合わず、1回目だけ代替の書体で刷られることがあるため、ここで用意しておく。
+    if (document.fonts && document.fonts.load) document.fonts.load('800 12pt Montserrat');
     // タブを開くたび(既に開いている状態からの再クリックも含む)にクラウドから
     // 最新の月報データを取り直させるため、直近の同期済みキーの記録をリセットする。
     reportSyncedKey = null;
