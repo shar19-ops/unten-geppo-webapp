@@ -1,6 +1,6 @@
 {
-  "name": "運転管理月報",
-  "short_name": "運転月報",
+  "name": "Y-Drarepo（運転管理月報）",
+  "short_name": "Y-Drarepo",
   "description": "社有車・私有車の運転記録入力、月報表示・印刷・Excel出力アプリ",
   "scope": "./",
   "display": "standalone",

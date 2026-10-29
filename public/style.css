@@ -36,6 +36,8 @@ body {
   justify-content: space-between;
 }
 .app-header h1 { font-size: 1.15rem; margin: 0; }
+/* アプリ名(Y-Drarepo)の横に出す、何のアプリかの説明 */
+.app-subtitle { font-size: 0.8rem; font-weight: normal; color: var(--muted); margin-left: 0.15rem; }
 .app-version {
   font-size: 0.65rem;
   font-weight: normal;
@@ -388,6 +390,17 @@ input[type="date"].input-lg {
   .print-stamp-table th:nth-child(2), .print-stamp-table td:nth-child(2) {
     display: table-cell;
   }
+}
+
+/* 印刷用帳票のフッターにある YUDENSHA の書体。Google Fonts から読むのをやめ、
+   アプリ内に置いている(社外への通信を増やさないため)。latinサブセットのみ18.6KB。
+   ライセンス: SIL Open Font License 1.1 (assets/fonts/OFL.txt) */
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("assets/fonts/montserrat-800-latin.woff2") format("woff2");
 }
 
 /* --- 印刷用帳票(print-sheet.js)。社内書式アプリ Y-Format の本-安全-A0014 運転月報と同じ見た目 ---

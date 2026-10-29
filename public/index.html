@@ -3,23 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
-<title>運転管理月報</title>
+<title>Y-Drarepo（運転管理月報）</title>
 <!-- manifest.jsonにstart_urlをあえて置いていない。start_urlがあるとホーム画面のアイコンは
      常にそのURLを開いてしまい、QRを読んだ画面から追加しても?qrToken=が引き継がれないため
      (車両の固定が効かなくなる)。省略すると追加時に開いていたURLがそのまま使われる。 -->
-<link rel="manifest" href="manifest.json?v=20261028a">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20261028a">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=20261028a">
+<link rel="manifest" href="manifest.json?v=20261029a">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20261029a">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=20261029a">
 <meta name="theme-color" content="#2f6fed">
-<link rel="stylesheet" href="style.css?v=20261028a">
-<!-- 印刷用帳票(Y-Format)のロゴタイプ YUDENSHA の書体 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap">
+<link rel="stylesheet" href="style.css?v=20261029a">
 </head>
 <body>
 <header class="app-header no-print">
   <!-- app-version はキャッシュバスティング用の ?v= と同じ値を都度手動で合わせる -->
-  <h1>運転管理月報 <span class="app-version" id="appVersion">v20261028a</span></h1>
+  <h1>Y-Drarepo <span class="app-subtitle">運転管理月報</span> <span class="app-version" id="appVersion">v20261029a</span></h1>
   <label class="admin-toggle"><input type="checkbox" id="adminModeCheck"> 管理者</label>
 </header>
 
@@ -49,14 +46,14 @@
   </div>
 </div>
 
-<script src="storage.js?v=20261028a"></script>
-<script src="qr-export.js?v=20261028a"></script>
-<script src="vehicles.js?v=20261028a"></script>
-<script src="trip-entry.js?v=20261028a"></script>
-<script src="date-stamp.js?v=20261028a"></script>
-<script src="print-sheet.js?v=20261028a"></script>
-<script src="report.js?v=20261028a"></script>
-<script src="xlsx-export.js?v=20261028a"></script>
-<script src="app.js?v=20261028a"></script>
+<script src="storage.js?v=20261029a"></script>
+<script src="qr-export.js?v=20261029a"></script>
+<script src="vehicles.js?v=20261029a"></script>
+<script src="trip-entry.js?v=20261029a"></script>
+<script src="date-stamp.js?v=20261029a"></script>
+<script src="print-sheet.js?v=20261029a"></script>
+<script src="report.js?v=20261029a"></script>
+<script src="xlsx-export.js?v=20261029a"></script>
+<script src="app.js?v=20261029a"></script>
 </body>
 </html>
