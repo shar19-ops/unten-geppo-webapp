@@ -735,7 +735,11 @@ function fitReportCellText(target, widthScale = 1) {
     el.style.fontSize = ''; // 基準サイズに戻してから測り直す(前回の縮小を引きずらない)
     const text = el.value || '';
     if (!text) return;
-    const available = el.clientWidth * widthScale - 1; // 端がぎりぎり切れないよう1px余裕を見る
+    // clientWidthはpaddingを含むため差し引く(行先欄は字下げのpadding-leftを持つ)。
+    // 端がぎりぎり切れないよう1px余裕を見る。
+    const cs = getComputedStyle(el);
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const available = inner * widthScale - 1;
     if (available <= 0) return;
     const needed = measureReportCellTextWidth(text, el);
     if (needed <= available) return;
