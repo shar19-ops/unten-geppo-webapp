@@ -1,10 +1,14 @@
 :root {
-  /* 入力画面が白一色で欄の区切りが分かりにくかったため、下地を薄い青にしている。
-     入力欄・ボタン・画面の帳票は白(--surface)のままにして、下地から浮いて見せる。
-     濃さを変えたいときは --bg と --panel-bg の2つを触れば全体に効く。 */
-  --bg: #d9e4f3;
-  --panel-bg: #dfeaf8;
-  /* 白のままにしたい面(画面の帳票・タブボタン・パスワード入力) */
+  /* 入力画面が白一色で欄の区切りが分かりにくかったため、奥から手前へ4段階の
+     明暗を付けている。手前に来るほど明るく、入力欄が一番明るい(白)。
+       --bg        ページの背景(一番暗い)
+       --group-bg  パネルの中の囲み(.inline-form など)
+       --panel-bg  パネルの中
+       --surface   入力欄・タブボタン・画面の帳票(白)
+     濃さを変えたいときはこの4つを触れば全体に効く。 */
+  --bg: #b0c6e2;
+  --group-bg: #dce8f6;
+  --panel-bg: #eef4fc;
   --surface: #ffffff;
   --border: #d7dae0;
   --text: #1f2430;
@@ -138,7 +142,7 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   padding: 1rem;
   margin-bottom: 1rem;
   /* パネルより一段濃い下地にして、入力欄のまとまりの区切りを出す */
-  background: var(--bg);
+  background: var(--group-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -490,7 +494,7 @@ input[type="date"].input-lg {
 /* --- 発行者の押印(運転月報) --- */
 .issuer-stamp-panel {
   border: 1px solid var(--border); border-radius: 8px;
-  padding: 0.9rem 1rem; margin-top: 0.75rem; background: var(--bg);
+  padding: 0.9rem 1rem; margin-top: 0.75rem; background: var(--group-bg);
 }
 .issuer-stamp-fields {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
