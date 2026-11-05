@@ -281,7 +281,12 @@ input[type="date"].input-lg {
 .driver-cell { min-width: 4.5rem; }
 /* .report-table th/td の text-align:center の方がクラス単体より詳細度が高く上書きされてしまうため、
    th/td込みで詳細度を揃えて左寄せを確実に効かせる */
-.report-table td.dest-cell { text-align: left; text-indent: 1em; }
+.report-table td.dest-cell { text-align: left; }
+/* 行先の字下げは、セルのtext-indentではなく入力欄のpadding-leftで取る。
+   text-indentだと中の入力欄ごと右へずれるが、入力欄はwidth:100%(=セルの内側いっぱい)
+   のままなので、ずれた分だけ右にはみ出してしまう。padding-leftなら
+   box-sizing:border-box により幅の内側に収まる。 */
+.report-table td.dest-cell input.cell-input { padding-left: 1em; }
 .num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* 給油伝票の照合印。画面ではチェックボックス、印刷では✓だけを出す
    (チェックボックスの枠はブラウザによって印刷時の見え方が揃わないため) */
