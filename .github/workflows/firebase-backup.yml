@@ -1,0 +1,59 @@
+name: Firebaseのバックアップ
+
+# 毎日3:00(JST)にFirebase Realtime Databaseの全データを書き出し、暗号化してArtifactに残す。
+# cronはUTC指定なので前日18:00を指定している(UTC 18:00 = JST 翌3:00)。
+#
+# Artifactはpublicリポジトリでは誰でもダウンロードできるため、必ず暗号化してから
+# アップロードする。パスフレーズはSecretsのBACKUP_PASSPHRASE。復元の手順は
+# docs/firebase-backup.md を参照。
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: パスフレーズが設定されているか確認する
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::BACKUP_PASSPHRASE が未設定です。リポジトリの Settings → Secrets and variables → Actions で登録してください(手順: docs/firebase-backup.md)"
+            exit 1
+          fi
+
+      - name: Firebaseから全データを書き出す
+        run: node scripts/backup-firebase.mjs backup
+
+      - name: 日付(JST)を求める
+        id: date
+        run: echo "jst=$(TZ=Asia/Tokyo date +%Y%m%d-%H%M)" >> "$GITHUB_OUTPUT"
+
+      # 平文のbackup/はここで消す。Artifactに上がるのは暗号化済みの1ファイルだけ。
+      - name: 暗号化する
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          tar -czf backup.tar.gz -C backup .
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in backup.tar.gz -out "firebase-backup-${{ steps.date.outputs.jst }}.tar.gz.enc" \
+            -pass env:BACKUP_PASSPHRASE
+          rm -rf backup backup.tar.gz
+          ls -la firebase-backup-*.tar.gz.enc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firebase-backup-${{ steps.date.outputs.jst }}
+          path: firebase-backup-*.tar.gz.enc
+          retention-days: 90
+          if-no-files-found: error

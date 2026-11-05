@@ -86,7 +86,8 @@ function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
   return Array.from(map.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
-// 運転月報1台分の帳票HTML(2ページ分)を組み立てる。単一車両の運転月報画面と、
+// 運転月報1台分の帳票HTML(2ページ分)を組み立てる。印刷では、この画面用の表の代わりに
+// 後ろに付けた印刷用帳票(print-sheet.js、Y-Format の本-安全-A0014 と同じ見た目)を出す。単一車両の運転月報画面と、
 // 管理者向けの一括印刷(複数車両分をまとめてこの関数で組み立てて連結する)の両方から使う。
 // 給油伝票の照合印(fuelSlipChecked)は管理者が任意で付ける欄。列そのものは誰が見ても
 // 同じ帳票になるよう常に出し、チェックの操作だけを管理者モードに限定する(印刷結果が
@@ -136,12 +137,13 @@ function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager,
           <tr>
             <td>${record.safetyManagerConfirmedAt ? `${escapeHtml(formatShortDate(record.safetyManagerConfirmedAt))}<br>${escapeHtml(record.safetyManagerName || '')}` : ''}</td>
             <td></td>
-            <td>${record.issuerConfirmedAt ? `${escapeHtml(formatShortDate(record.issuerConfirmedAt))}<br>${escapeHtml(surnameOf(vehicleManager))}` : ''}</td>
+            <td class="issuer-stamp-cell">${issuerStampSvg(record)}</td>
           </tr>
         </table>
         <p class="print-page-number">2 / 2</p>
       </div>
     </div>
+    ${buildPrintSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel)}
   `;
 }
 
@@ -161,6 +163,43 @@ async function syncAndBuildReportSheetForVehicle(vehicle, year, month) {
   const officeName = vehicle.officeName || '';
   const vehicleManager = vehicleManagerOf(vehicle);
   return buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicle.plateNumber || '', { fuelSlipEditable: false });
+}
+
+// 発行者(車両管理者)の押印。提出とは独立していて、押した分だけ帳票の発行者欄に
+// デート印が出る。苗字は車両マスタの車両管理者から初期値を入れるが、実際に押す人が
+// 違う場合もあるため editable にしている。役職と色の決まりは伝票アプリと同じ。
+function issuerStampPanelHtml(record, vehicleManager) {
+  const stamped = !!(record.issuerStampName && record.issuerStampDate);
+  const name = record.issuerStampName || surnameOf(vehicleManager);
+  const title = record.issuerStampTitle || '';
+  const date = record.issuerStampDate || todayIso();
+  const preview = stamped ? issuerStampSvg(record) : '';
+  return `
+    <div class="issuer-stamp-panel no-print">
+      <div class="issuer-stamp-fields">
+        <div class="field">
+          <label>発行者の苗字</label>
+          <input type="text" class="input-lg" id="issuerStampName" maxlength="10" placeholder="苗字" value="${escapeHtml(name)}">
+        </div>
+        <div class="field">
+          <label>役職</label>
+          <select class="input-lg" id="issuerStampTitle">
+            ${STAMP_TITLES.map((t) => `<option value="${escapeHtml(t)}" ${t === title ? 'selected' : ''}>${t || '（なし）'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>押印日</label>
+          <input type="date" class="input-lg" id="issuerStampDate" value="${escapeHtml(date)}">
+        </div>
+        <div class="issuer-stamp-preview">${preview}</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="button" id="issuerStampBtn">${stamped ? '押し直す' : '発行者として押印'}</button>
+        ${stamped ? '<button class="btn btn-danger" type="button" id="issuerStampClearBtn">押印を取り消す</button>' : ''}
+      </div>
+      <p class="hint">押印は提出とは別の操作です。押すと帳票の「発行者」欄にデート印が出ます。</p>
+    </div>
+  `;
 }
 
 function renderReportView() {
@@ -263,8 +302,11 @@ function renderReportView() {
           </select>
           ${isAdminUnlocked() ? `
             <button class="btn btn-ghost" type="button" id="reportStatusListBtn">提出状況一覧</button>
-            <button class="btn btn-primary" type="button" id="reportPrintBtn">印刷／PDF</button>
           ` : ''}
+          <!-- 印刷は車両管理者も行うため管理者モードに限定しない。印刷される帳票の中身は
+               誰が押しても同じ(給油伝票の照合チェックは管理者だけが操作できるが、
+               その結果の表示は全員に出る)。複数車両の一括印刷は管理者モードのまま。 -->
+          <button class="btn btn-primary" type="button" id="reportPrintBtn">印刷／PDF</button>
         </div>
       </div>
       <div class="inline-form">
@@ -280,6 +322,7 @@ function renderReportView() {
         </div>
       </div>
       <p class="status ${reportStatusIsError ? 'error' : 'ok'}">${reportStatusMessage}</p>
+      ${issuerStampPanelHtml(record, vehicleManager)}
       ${(!record.issuerConfirmedAt && nextMonthHasEntry) ? `
         <div class="issuer-confirm-panel no-print">
           <p>運転月報の記載内容を確認後、記載内容に問題が無ければ提出してください。</p>
@@ -356,6 +399,46 @@ function renderReportView() {
       saveMonthlyLog(record);
       syncLogMetaToCloud(record.key, buildMetaPayload(record));
       reportJustSubmitted = true;
+      renderReportView();
+    });
+  }
+
+  // 発行者の押印。提出とは別物なので、ここでは提出前の入力チェックは行わない。
+  const issuerStampBtnEl = document.getElementById('issuerStampBtn');
+  if (issuerStampBtnEl) {
+    issuerStampBtnEl.addEventListener('click', () => {
+      const name = document.getElementById('issuerStampName').value.trim();
+      const date = document.getElementById('issuerStampDate').value;
+      if (!name || !date) {
+        reportStatusMessage = '発行者の苗字と押印日を入力してください';
+        reportStatusIsError = true;
+        renderReportView();
+        return;
+      }
+      record.issuerStampName = name;
+      record.issuerStampTitle = document.getElementById('issuerStampTitle').value;
+      record.issuerStampDate = date;
+      record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      reportStatusMessage = '発行者として押印しました';
+      reportStatusIsError = false;
+      renderReportView();
+    });
+  }
+  const issuerStampClearBtnEl = document.getElementById('issuerStampClearBtn');
+  if (issuerStampClearBtnEl) {
+    issuerStampClearBtnEl.addEventListener('click', () => {
+      // nullではなく空文字で消す(Firebaseは値がnullのキーを消してしまい、
+      // 取り消したことが他の端末に伝わらないため)
+      record.issuerStampName = '';
+      record.issuerStampTitle = '';
+      record.issuerStampDate = '';
+      record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      reportStatusMessage = '押印を取り消しました';
+      reportStatusIsError = false;
       renderReportView();
     });
   }
@@ -652,7 +735,11 @@ function fitReportCellText(target, widthScale = 1) {
     el.style.fontSize = ''; // 基準サイズに戻してから測り直す(前回の縮小を引きずらない)
     const text = el.value || '';
     if (!text) return;
-    const available = el.clientWidth * widthScale - 1; // 端がぎりぎり切れないよう1px余裕を見る
+    // clientWidthはpaddingを含むため差し引く(行先欄は字下げのpadding-leftを持つ)。
+    // 端がぎりぎり切れないよう1px余裕を見る。
+    const cs = getComputedStyle(el);
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const available = inner * widthScale - 1;
     if (available <= 0) return;
     const needed = measureReportCellTextWidth(text, el);
     if (needed <= available) return;

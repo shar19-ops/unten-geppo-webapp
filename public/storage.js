@@ -93,7 +93,8 @@ function saveVehicles(list) {
 
 // ---------------- 車両マスタのクラウド同期(Firebase Realtime Database) ----------------
 // Firebase SDKは使わず、素のfetch()のみで読み書きする(ビルド不要という既存方針に合わせる)。
-// ルールは"auth != null"(匿名認証必須)の前提。DB URLの末尾にスラッシュは付けない。
+// ルールは firebase/database.rules.json が正(匿名認証必須。コレクション全体の置き換えは禁止)。
+// DB URLの末尾にスラッシュは付けない。
 const FIREBASE_DB_URL = 'https://unten-geppo-webapp-default-rtdb.firebaseio.com';
 
 // ---------------- Firebase匿名認証 ----------------
@@ -213,12 +214,17 @@ async function deleteVehicleFromCloud(vehicleId) {
   return { ok: true };
 }
 
+// Excel取込の確定時に、マージ済みの車両一覧をまとめて書く。
+// PUTではなくPATCHにしている。PUTは/vehicles全体の置き換えで、データベースのルールで禁止
+// している(1リクエストで全車両を消せる操作のため。firebase/database.rules.json)。PATCHは
+// 「名前を挙げた車両だけをそれぞれ置き換える」操作で、1台ずつ別の書き込みとして評価される
+// ので通る。listに無い車両は消されず残る(listはマージ済みで全車両を含むため実質同じ)。
 async function pushVehiclesToCloud(list) {
   const map = {};
   list.forEach((v) => { map[v.id] = v; });
   try {
     const res = await firebaseFetch('/vehicles.json', {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(map)
     });
@@ -270,6 +276,11 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     issuerConfirmedAt: '',
     safetyManagerConfirmedAt: '',
     safetyManagerName: '',
+    // 発行者の押印。提出(issuerConfirmedAt)とは別で、押した分だけ帳票に印が出る。
+    // 未押印は空文字にする(上と同じ理由。nullだとFirebaseがキーごと消すため)。
+    issuerStampName: '',
+    issuerStampTitle: '',
+    issuerStampDate: '',
     metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
@@ -337,6 +348,9 @@ function buildMetaPayload(record) {
     issuerConfirmedAt: record.issuerConfirmedAt,
     safetyManagerConfirmedAt: record.safetyManagerConfirmedAt,
     safetyManagerName: record.safetyManagerName,
+    issuerStampName: record.issuerStampName || '',
+    issuerStampTitle: record.issuerStampTitle || '',
+    issuerStampDate: record.issuerStampDate || '',
     updatedAt: record.metaUpdatedAt
   };
 }
@@ -483,6 +497,9 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
       local.issuerConfirmedAt = adoptCloud(cloudMeta.issuerConfirmedAt, local.issuerConfirmedAt);
       local.safetyManagerConfirmedAt = adoptCloud(cloudMeta.safetyManagerConfirmedAt, local.safetyManagerConfirmedAt);
       local.safetyManagerName = adoptCloud(cloudMeta.safetyManagerName, local.safetyManagerName);
+      local.issuerStampName = adoptCloud(cloudMeta.issuerStampName, local.issuerStampName);
+      local.issuerStampTitle = adoptCloud(cloudMeta.issuerStampTitle, local.issuerStampTitle);
+      local.issuerStampDate = adoptCloud(cloudMeta.issuerStampDate, local.issuerStampDate);
       local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }

@@ -1,6 +1,15 @@
 :root {
-  --bg: #f4f5f7;
-  --panel-bg: #ffffff;
+  /* 入力画面が白一色で欄の区切りが分かりにくかったため、奥から手前へ4段階の
+     明暗を付けている。手前に来るほど明るく、入力欄が一番明るい(白)。
+       --bg        ページの背景(一番暗い)
+       --group-bg  パネルの中の囲み(.inline-form など)
+       --panel-bg  パネルの中
+       --surface   入力欄・タブボタン・画面の帳票(白)
+     濃さを変えたいときはこの4つを触れば全体に効く。 */
+  --bg: #b0c6e2;
+  --group-bg: #dce8f6;
+  --panel-bg: #eef4fc;
+  --surface: #ffffff;
   --border: #d7dae0;
   --text: #1f2430;
   --muted: #6b7280;
@@ -36,6 +45,8 @@ body {
   justify-content: space-between;
 }
 .app-header h1 { font-size: 1.15rem; margin: 0; }
+/* アプリ名(Y-Drarepo)の横に出す、何のアプリかの説明 */
+.app-subtitle { font-size: 0.8rem; font-weight: normal; color: var(--muted); margin-left: 0.15rem; }
 .app-version {
   font-size: 0.65rem;
   font-weight: normal;
@@ -49,7 +60,7 @@ body {
   min-height: 44px;
   padding: 0.6rem 0.4rem;
   border: 1px solid var(--border);
-  background: var(--panel-bg);
+  background: var(--surface);
   color: var(--muted);
   border-radius: 8px;
   font-size: 0.85rem;
@@ -113,6 +124,9 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .btn-ghost { background: transparent; }
 .btn-text { border: none; background: none; color: var(--accent); padding: 0.25rem 0.5rem; min-height: auto; }
 .btn-danger { color: var(--danger); }
+/* 取り消せない操作の実行ボタン。誤クリックを避けるため、隣のキャンセルと見た目を大きく変える。 */
+.btn-danger-solid { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-danger-solid:hover { background: #b93a3a; }
 .btn-block { display: block; width: 100%; padding: 0.9rem; font-size: 1rem; margin-top: 0.5rem; }
 .btn-inline { padding: 0.25rem 0.7rem; font-size: 0.8rem; margin-left: 0.5rem; vertical-align: middle; }
 
@@ -127,7 +141,8 @@ main { max-width: 960px; margin: 0 auto; padding: 1rem; }
   gap: 0.75rem;
   padding: 1rem;
   margin-bottom: 1rem;
-  background: var(--bg);
+  /* パネルより一段濃い下地にして、入力欄のまとまりの区切りを出す */
+  background: var(--group-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -227,7 +242,7 @@ input[type="date"].input-lg {
    見出し・ラベル類はサンプルの明朝体、数値・データはゴシック体という
    サンプルExcelのフォント使い分けをそのまま踏襲する。 */
 .report-sheet {
-  background: var(--panel-bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   padding: 1.25rem;
   max-width: 900px;
@@ -266,7 +281,12 @@ input[type="date"].input-lg {
 .driver-cell { min-width: 4.5rem; }
 /* .report-table th/td の text-align:center の方がクラス単体より詳細度が高く上書きされてしまうため、
    th/td込みで詳細度を揃えて左寄せを確実に効かせる */
-.report-table td.dest-cell { text-align: left; text-indent: 1em; }
+.report-table td.dest-cell { text-align: left; }
+/* 行先の字下げは、セルのtext-indentではなく入力欄のpadding-leftで取る。
+   text-indentだと中の入力欄ごと右へずれるが、入力欄はwidth:100%(=セルの内側いっぱい)
+   のままなので、ずれた分だけ右にはみ出してしまう。padding-leftなら
+   box-sizing:border-box により幅の内側に収まる。 */
+.report-table td.dest-cell input.cell-input { padding-left: 1em; }
 .num-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* 給油伝票の照合印。画面ではチェックボックス、印刷では✓だけを出す
    (チェックボックスの枠はブラウザによって印刷時の見え方が揃わないため) */
@@ -338,6 +358,21 @@ input[type="date"].input-lg {
 .qr-image { display: flex; justify-content: center; margin: 0.75rem 0; }
 .qr-url { word-break: break-all; }
 
+/* 再発行前の注意書き。QRパネル自体は中央寄せだが、読ませる文章なので左寄せに戻す。 */
+.qr-reissue-warn {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: #fdf2f2;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+.qr-reissue-warn h3 { margin: 0 0 0.4rem; font-size: 0.95rem; color: var(--danger); }
+.qr-reissue-warn p { margin: 0 0 0.4rem; font-size: 0.9rem; }
+.qr-reissue-warn ul { margin: 0 0 0.75rem; padding-left: 1.2rem; font-size: 0.85rem; }
+.qr-reissue-warn li { margin-bottom: 0.2rem; }
+.qr-reissue-warn .panel-actions { justify-content: flex-end; }
+
 /* --- 印刷(A4・サンプルExcelの余白に合わせる) --- */
 @page { size: A4 portrait; margin: 19mm 8mm 19mm 13mm; }
 .print-page-number { display: none; }
@@ -352,6 +387,8 @@ input[type="date"].input-lg {
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
+  /* 画面の下地(薄い青)は紙に出さない。車両QRのように、パネルごと印刷する画面がある */
+  .panel, .inline-form, .app-header { background: #fff; }
   main { padding: 0; max-width: none; }
   .view { display: none; }
   .view.active { display: block; }
@@ -372,6 +409,108 @@ input[type="date"].input-lg {
   }
 }
 
+/* 印刷用帳票のフッターにある YUDENSHA の書体。Google Fonts から読むのをやめ、
+   アプリ内に置いている(社外への通信を増やさないため)。latinサブセットのみ18.6KB。
+   ライセンス: SIL Open Font License 1.1 (assets/fonts/OFL.txt) */
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("assets/fonts/montserrat-800-latin.woff2") format("woff2");
+}
+
+/* --- 印刷用帳票(print-sheet.js)。社内書式アプリ Y-Format の本-安全-A0014 運転月報と同じ見た目 ---
+   画面では出さず、印刷では画面用の表(.report-sheet)の代わりにこちらを出す。
+   用紙の余白は帳票の中で取るので、名前付きページで余白0にする(車両QRの印刷の@pageはそのまま)。 */
+@page yformat { size: A4 portrait; margin: 0; }
+.print-sheet { display: none; }
+.print-sheet {
+  --ps-line: #333;
+  --ps-label-bg: #eef0f3;
+  font-family: "BIZ UDPGothic", "BIZ UDPゴシック", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 10pt;
+  color: #1a1a1a;
+}
+.ps-page {
+  page: yformat;
+  width: 210mm; height: 297mm; padding: 10mm 12mm 8mm; overflow: hidden;
+  display: flex; flex-direction: column;
+  break-after: page; page-break-after: always;
+}
+.ps-header { display: flex; align-items: flex-start; gap: 6mm; margin-bottom: 4mm; }
+.ps-head-left { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.ps-code { font-size: 8pt; color: #555; letter-spacing: .05em; }
+.ps-title {
+  font-size: 20pt; font-weight: bold; letter-spacing: .3em;
+  margin: 1mm 0 2mm; padding-bottom: 1.5mm;
+  border-bottom: 3px double var(--ps-line);
+  min-width: 70mm; white-space: nowrap;
+}
+.ps-sub { font-size: 9pt; margin-left: .5em; letter-spacing: 0; font-weight: normal; }
+.ps-meta { display: flex; align-items: baseline; gap: 2mm; font-size: 9.5pt; }
+.ps-m-label { color: #333; white-space: nowrap; }
+.ps-m-val { border-bottom: 1px solid var(--ps-line); min-width: 38mm; padding: 0 1mm; }
+.ps-stamps { display: flex; border: 1.2px solid var(--ps-line); flex-shrink: 0; }
+.ps-stamp-box { width: 20mm; display: flex; flex-direction: column; }
+.ps-stamp-box + .ps-stamp-box { border-left: 1px solid var(--ps-line); }
+.ps-sb-label {
+  height: 5mm; line-height: 5mm; text-align: center; font-size: 7.5pt; white-space: nowrap; overflow: hidden;
+  background: var(--ps-label-bg); border-bottom: 1px solid var(--ps-line); letter-spacing: .05em;
+}
+.ps-sb-label.ps-two { font-size: 6pt; line-height: 2.3mm; padding-top: .2mm; letter-spacing: 0; }
+.ps-sb-area { height: 20mm; display: flex; align-items: center; justify-content: center; }
+.ps-sb-area svg { width: 14.4mm; height: 14.4mm; display: block; }
+.ps-body { flex: 1; display: flex; flex-direction: column; gap: 4mm; }
+.ps-grid { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.2px solid var(--ps-line); }
+.ps-grid th, .ps-grid td {
+  border: 1px solid var(--ps-line); padding: 0 1.5mm; height: 5.5mm; vertical-align: middle;
+  font-weight: normal; font-size: 9pt; overflow: hidden; white-space: nowrap;
+}
+.ps-grid th, .ps-grid td.ps-lbl { background: var(--ps-label-bg); text-align: center; font-size: 8pt; padding: 0 1mm; line-height: 1.25; }
+.ps-grid th { white-space: normal; }
+.ps-info td { height: 7mm; }
+.ps-days thead th { height: 6mm; }
+.ps-days tbody td { height: 9mm; }
+.ps-c { text-align: center; }
+.ps-n { text-align: right; font-variant-numeric: tabular-nums; }
+.ps-t { text-align: left; }
+.ps-totals td { height: 7mm; }
+.ps-totals td.ps-lbl { white-space: normal; }
+.ps-unit { margin-left: 1.5mm; font-size: 8pt; }
+.ps-check td.ps-item { font-size: 8pt; }
+.ps-check td.ps-vertical { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: .1em; white-space: nowrap; padding: 1mm 0; }
+.ps-check td.ps-note { font-size: 8pt; color: #333; text-align: left; }
+.ps-footer {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-top: 4mm; padding-top: 2mm; border-top: 1px solid #9a9a9a;
+}
+.ps-brand { display: flex; align-items: center; gap: 3mm; }
+.ps-mark { height: 6.5mm; }
+.ps-word { font-family: "Montserrat", "Segoe UI", Arial, sans-serif; font-weight: 800; font-size: 12.5pt; letter-spacing: .07em; color: #1f3f8f; line-height: 1; }
+.ps-ver { font-size: 7.5pt; color: #666; }
+@media print {
+  .report-sheet { display: none !important; }
+  .print-sheet { display: block; }
+  .print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #view-report .panel { display: none; }
+}
+
+/* --- 発行者の押印(運転月報) --- */
+.issuer-stamp-panel {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.9rem 1rem; margin-top: 0.75rem; background: var(--group-bg);
+}
+.issuer-stamp-fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem; align-items: end;
+}
+.issuer-stamp-preview { display: flex; align-items: center; justify-content: center; min-height: 64px; }
+.issuer-stamp-preview svg { width: 60px; height: 60px; }
+/* 画面の押印欄も、印刷と同じ丸型デート印で見せる */
+.print-stamp-table td.issuer-stamp-cell { padding: 1mm; }
+.print-stamp-table td.issuer-stamp-cell svg { width: 16mm; height: 16mm; display: block; margin: 0 auto; }
+
 /* --- 管理者パスワード保護(車両リスト) --- */
 .admin-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; }
 .admin-toggle input { width: 18px; height: 18px; }
@@ -388,7 +527,7 @@ input[type="date"].input-lg {
 }
 .admin-pw-overlay[hidden] { display: none; }
 .admin-pw-dialog {
-  background: var(--panel-bg);
+  background: var(--surface);
   border-radius: 10px;
   padding: 1.5rem;
   max-width: 320px;
