@@ -281,6 +281,9 @@ function createEmptyMonthlyLog(vehicleRef, year, month, meta = {}) {
     issuerStampName: '',
     issuerStampTitle: '',
     issuerStampDate: '',
+    // 月末の入庫時メーター指針(km)。未入力は空文字(上と同じ理由)。翌月の出庫時メーター
+    // 指針が入っている間はそちらを優先して使う(app.js の monthEndMeter)。
+    endMeter: '',
     metaUpdatedAt: null,
     updatedAt: new Date().toISOString()
   };
@@ -351,6 +354,7 @@ function buildMetaPayload(record) {
     issuerStampName: record.issuerStampName || '',
     issuerStampTitle: record.issuerStampTitle || '',
     issuerStampDate: record.issuerStampDate || '',
+    endMeter: typeof record.endMeter === 'number' ? record.endMeter : '',
     updatedAt: record.metaUpdatedAt
   };
 }
@@ -500,6 +504,7 @@ async function syncMonthlyLogFromCloud(vehicleRef, year, month, meta = {}) {
       local.issuerStampName = adoptCloud(cloudMeta.issuerStampName, local.issuerStampName);
       local.issuerStampTitle = adoptCloud(cloudMeta.issuerStampTitle, local.issuerStampTitle);
       local.issuerStampDate = adoptCloud(cloudMeta.issuerStampDate, local.issuerStampDate);
+      local.endMeter = adoptCloud(cloudMeta.endMeter, local.endMeter);
       local.metaUpdatedAt = cloudMeta.updatedAt;
       changed = true;
     }

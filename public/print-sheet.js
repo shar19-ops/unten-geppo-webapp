@@ -97,7 +97,7 @@ function printDaysHtml(record, nextMonthDays, startDay, endDay, holidays) {
   for (let d = startDay; d <= endDay; d++) {
     const inMonth = d <= lastDay;
     const day = (inMonth && record.days[d]) || {};
-    const distance = inMonth ? computeDistance(record.days, d, record.year, record.month, nextMonthDays) : '';
+    const distance = inMonth ? computeDistance(record.days, d, record.year, record.month, nextMonthDays, record.endMeter) : '';
     const dow = inMonth ? new Date(record.year, record.month - 1, d).getDay() : -1;
     const isHoliday = inMonth && (dow === 0 || dow === 6 || holidays.has(dateKey(record.year, record.month, d)));
     const dest = day.destination || '';
@@ -121,11 +121,21 @@ function printDaysHtml(record, nextMonthDays, startDay, endDay, holidays) {
     return `<th rowspan="2">${c.label}</th>`;
   }).join('');
   const head2 = PRINT_DAY_COLUMNS.filter((c) => c.group).map((c) => `<th>${c.label}</th>`).join('');
+  // 2枚目だけ、31日の下に「月末 入庫時」の行(Y-Format 本-安全-A0014 と同じ。2026-11-27 追加)
+  const endMeter = monthEndMeter(nextMonthDays, record.endMeter);
+  const foot = endDay >= 31 ? `
+      <tfoot>
+        <tr>
+          <td class="ps-lbl" colspan="2">月末 入庫時</td>
+          <td class="ps-n">${endMeter != null ? endMeter.toLocaleString() : ''}</td>
+          <td class="ps-t ps-end-note" colspan="${PRINT_DAY_COLUMNS.length - 3}">← 月末の入庫時のメーター指針（km）</td>
+        </tr>
+      </tfoot>` : '';
   return `
     <table class="ps-grid ps-days">
       <colgroup>${PRINT_DAY_COLUMNS.map((c) => `<col${c.w ? ` style="width:${c.w}mm"` : ''}>`).join('')}</colgroup>
       <thead><tr>${head1}</tr><tr>${head2}</tr></thead>
-      <tbody>${rows.join('')}</tbody>
+      <tbody>${rows.join('')}</tbody>${foot}
     </table>`;
 }
 
@@ -160,7 +170,7 @@ function printFooterHtml() {
 
 // 1台分(2枚)の印刷用帳票HTML。buildReportSheetHtml(report.js)から、画面用の表と一緒に出力する。
 function buildPrintSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel) {
-  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
+  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays, record.endMeter);
   const holidays = computeJapaneseHolidays(record.year);
   const stampCells = [
     { label: '安全運転<br>管理者', svg: record.safetyManagerConfirmedAt ? printStampSvg(record.safetyManagerName, record.safetyManagerConfirmedAt) : '' },

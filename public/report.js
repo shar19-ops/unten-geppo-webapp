@@ -23,10 +23,15 @@ let reportBulkPrintSheets = []; // 同期完了後に組み立てた各車両分
 // 15日・末日の日常点検が両方とも記録済み(全項目にresultがある)ことを要求する。
 function findSubmissionErrorCells(record, nextMonthDays) {
   const errors = new Set();
+  // 最後に出庫した日の走行距離は月末の入庫時メーター指針から出すため、それが無ければ入庫時の欄も赤くする
+  if (monthEndMeter(nextMonthDays, record.endMeter) == null
+    && Object.values(record.days || {}).some((day) => day && day.meterReading != null)) {
+    errors.add('endMeter');
+  }
   for (let d = 1; d <= 31; d++) {
     const day = record.days[d] || {};
     if (day.meterReading == null) continue;
-    const distance = computeDistance(record.days, d, record.year, record.month, nextMonthDays);
+    const distance = computeDistance(record.days, d, record.year, record.month, nextMonthDays, record.endMeter);
     if (distance === '') errors.add(`day:${d}:distance`);
     if (!day.destination) errors.add(`day:${d}:destination`);
     if (!day.driver) errors.add(`day:${d}:driver`);
@@ -94,9 +99,23 @@ function buildMonthOptions(vehicleRef, selectedYear, selectedMonth) {
 // 見る人によって変わらないようにするため)。一括印刷画面は保存処理を持たないので、
 // そちらからはfuelSlipEditable:falseで読み取り専用にする。
 function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager, vehicleNumberLabel, options = {}) {
-  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
+  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays, record.endMeter);
   const holidays = computeJapaneseHolidays(record.year);
   const canCheckFuelSlip = options.fuelSlipEditable !== false && isAdminUnlocked();
+  // 31日の下の「月末 入庫時」の行。翌月の出庫時メーター指針があればそれを表示して手入力は止める
+  const endFromNext = nextMonthFirstMeter(nextMonthDays);
+  const endValue = monthEndMeter(nextMonthDays, record.endMeter);
+  const endErrorClass = reportCellErrors.has('endMeter') ? 'cell-error' : '';
+  const endRow = `
+    <tfoot>
+      <tr class="end-meter-row">
+        <td class="day-cell end-meter-label">月末</td>
+        <td class="num-cell meter-cell ${endErrorClass}"><input type="text" inputmode="decimal" class="cell-input" data-meta-field="endMeter" value="${endValue != null ? endValue.toLocaleString() : ''}"${endFromNext != null || options.fuelSlipEditable === false ? ' readonly' : ''}></td>
+        <td class="end-meter-note" colspan="7">← 月末の<strong>入庫時</strong>のメーター指針（km）${endFromNext != null
+          ? '　翌月の最初の出庫時メーター指針を反映しています'
+          : '　翌月の出庫時メーター指針が入ると、その値に置き換わります'}</td>
+      </tr>
+    </tfoot>`;
   return `
     <div class="report-sheet">
       <div class="report-header">
@@ -108,11 +127,11 @@ function buildReportSheetHtml(record, nextMonthDays, officeName, vehicleManager,
         </div>
       </div>
 
-      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip)}
+      ${reportBlock(record.days, 1, 15, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip, record.endMeter, '')}
       ${checklistBlock('点検日15日', record.checklistMid, 'checklistMid')}
       <p class="print-page-number">1 / 2</p>
       <div class="report-page2">
-        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip)}
+        ${reportBlock(record.days, 16, 31, record.year, record.month, holidays, nextMonthDays, canCheckFuelSlip, record.endMeter, endRow)}
 
         <table class="report-table totals-table">
           <tr>
@@ -279,7 +298,7 @@ function renderReportView() {
   // (月末点検の完了状況は見ない)。
   const nextMonthHasEntry = Object.values(nextMonthDays).some((d) => dayHasData(d));
 
-  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays);
+  const totals = computeTotals(record.days, record.year, record.month, nextMonthDays, record.endMeter);
   const holidays = computeJapaneseHolidays(record.year);
   // 事業所名・車両管理者は車両リストの登録内容から転記する(未登録の私有車履歴の場合は転記元が無いため空欄)
   const vehicle = selectedOption.vehicleId ? loadVehicles().find((v) => v.id === selectedOption.vehicleId) : null;
@@ -382,6 +401,9 @@ function renderReportView() {
         const messages = [];
         if (Array.from(errors).some((k) => k.startsWith('day:'))) {
           messages.push('出庫時メーター指針が入力されている日で、走行距離・行先・運転者・アルコールチェック(始業前/終業後)のいずれかが未入力の日があります(ピンク色のセルをご確認ください)');
+        }
+        if (errors.has('endMeter')) {
+          messages.push('月末の入庫時メーター指針が未入力です(31日の下の欄。翌月の出庫時メーター指針が入っていれば自動で入ります)');
         }
         if (Array.from(errors).some((k) => k.startsWith('checklist:'))) {
           messages.push('日常点検(15日・末日)の記録が未入力の項目があります(ピンク色の項目をご確認ください)');
@@ -502,6 +524,20 @@ function renderReportView() {
   }
 
   document.querySelector('.report-sheet').addEventListener('change', (e) => {
+    // 月末の入庫時メーター指針(日ごとではなく月報1件に1つなのでmetaに保存する)。
+    // 消したときはnullではなく空文字(Firebaseがnullのキーを消してしまうため)。
+    const endInput = e.target.closest('input[data-meta-field="endMeter"]');
+    if (endInput) {
+      if (endInput.readOnly) return;
+      const value = parseNumberOrNull(endInput.value);
+      record.endMeter = value == null ? '' : value;
+      record.metaUpdatedAt = new Date().toISOString();
+      saveMonthlyLog(record);
+      syncLogMetaToCloud(record.key, buildMetaPayload(record));
+      if (reportCellErrors.size) reportCellErrors = findSubmissionErrorCells(record, nextMonthDays);
+      renderReportView();
+      return;
+    }
     const input = e.target.closest('input[data-field]');
     if (input) {
       const day = Number(input.dataset.day);
@@ -748,11 +784,12 @@ function fitReportCellText(target, widthScale = 1) {
   });
 }
 
-function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays, canCheckFuelSlip) {
+// endRowHtml: 2枚目(16〜31日)だけ、31日の下に付ける「月末 入庫時」の行(<tfoot>)
+function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDays, canCheckFuelSlip, manualEndMeter, endRowHtml) {
   const rows = [];
   for (let d = startDay; d <= endDay; d++) {
     const day = days[d] || {};
-    const distance = computeDistance(days, d, year, month, nextMonthDays);
+    const distance = computeDistance(days, d, year, month, nextMonthDays, manualEndMeter);
     const colorClass = dayColorClass(year, month, d, holidays);
     const distanceErrorClass = reportCellErrors.has(`day:${d}:distance`) ? 'cell-error' : '';
     const destErrorClass = reportCellErrors.has(`day:${d}:destination`) ? 'cell-error' : '';
@@ -789,6 +826,7 @@ function reportBlock(days, startDay, endDay, year, month, holidays, nextMonthDay
         </tr>
       </thead>
       <tbody>${rows.join('')}</tbody>
+      ${endRowHtml || ''}
     </table>
   `;
 }
