@@ -286,6 +286,9 @@ input[type="date"].input-lg {
 .report-table td.end-meter-label { font-size: 0.75rem; white-space: nowrap; padding: 0.3rem 0.1rem; }
 .report-table td.end-meter-note { text-align: left; font-size: 0.75rem; color: #555; }
 .report-table .end-meter-row input.cell-input[readonly] { background: #eee; color: #333; }
+/* 運転記録入力の「月末入庫」：翌月の値を反映中は入力欄・保存ボタンを灰色に */
+#endMeterForm input[readonly] { background: #eee; color: #333; }
+#endMeterForm button:disabled { opacity: 0.5; cursor: default; }
 /* 行先の字下げは、セルのtext-indentではなく入力欄のpadding-leftで取る。
    text-indentだと中の入力欄ごと右へずれるが、入力欄はwidth:100%(=セルの内側いっぱい)
    のままなので、ずれた分だけ右にはみ出してしまう。padding-leftなら

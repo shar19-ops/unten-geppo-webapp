@@ -294,9 +294,11 @@ function renderReportView() {
     });
   }
 
-  // 発行者確認バナーは「翌月の運転記録が1件でも保存されたか」だけで判定する
-  // (月末点検の完了状況は見ない)。
-  const nextMonthHasEntry = Object.values(nextMonthDays).some((d) => dayHasData(d));
+  // 発行者確認バナーは「翌月の運転記録が1件でも保存されたか」、または「月末の入庫時
+  // メーター指針が入っているか」で判定する(月末点検の完了状況は見ない)。提出期日は翌月5日で、
+  // それまで出庫しない車両もあるため、入庫時が入っていれば提出できるようにする(2026-11-27)。
+  const nextMonthHasEntry = Object.values(nextMonthDays).some((d) => dayHasData(d))
+    || typeof record.endMeter === 'number';
 
   const totals = computeTotals(record.days, record.year, record.month, nextMonthDays, record.endMeter);
   const holidays = computeJapaneseHolidays(record.year);

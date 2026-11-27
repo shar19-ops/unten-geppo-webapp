@@ -1,7 +1,8 @@
 // 運転記録入力画面(iPhone優先)。データはstorage.js経由(saveTripDay/saveFuelOnly/loadMonthlyLog)。
 
 let tripUsePrivateCar = false;
-let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油入力
+let tripEntryMode = 'trip'; // 'trip'=運転記録入力 / 'fuel'=給油入力 / 'end'=月末の入庫時メーター指針
+let tripEndMonth = null; // 月末入庫の入力欄で選択中の年月("YYYY-MM"。未選択なら既定の月)
 let tripStatusMessage = '';
 let tripStatusIsError = false;
 let tripPendingChecklists = []; // 保存直後に発生した点検イベントのキュー({listKey, headerNote, vehicleRef, year, month, day})
@@ -34,9 +35,10 @@ function renderTripEntryView() {
       <div class="segmented">
         <button type="button" class="segmented-btn ${tripEntryMode === 'trip' ? 'active' : ''}" data-entry-mode="trip">運転記録入力</button>
         <button type="button" class="segmented-btn ${tripEntryMode === 'fuel' ? 'active' : ''}" data-entry-mode="fuel">給油入力</button>
+        <button type="button" class="segmented-btn ${tripEntryMode === 'end' ? 'active' : ''}" data-entry-mode="end">月末入庫</button>
       </div>
     </div>
-    ${tripEntryMode === 'trip' ? tripFormHtml() : fuelFormHtml()}
+    ${tripEntryMode === 'trip' ? tripFormHtml() : tripEntryMode === 'fuel' ? fuelFormHtml() : endMeterFormHtml()}
   `;
 
   root.querySelectorAll('[data-entry-mode]').forEach((btn) => {
@@ -77,8 +79,10 @@ function renderTripEntryView() {
     setupTripAppendHelpers();
     // 他の人・他の端末で入力済みの内容を入力欄へ出すため、クラウドから取り直す
     ensureTripLogSynced(effectiveTripVehicleId(), tripSelectedDate);
-  } else {
+  } else if (tripEntryMode === 'fuel') {
     document.getElementById('fuelEntryForm').addEventListener('submit', onFuelEntrySubmit);
+  } else {
+    setupEndMeterForm();
   }
 
   if (tripPendingChecklists.length) {
@@ -316,6 +320,137 @@ function fuelFormHtml() {
       <p class="status ${tripStatusIsError ? 'error' : 'ok'}">${tripStatusMessage}</p>
     </form>
   `;
+}
+
+// ---------------- 月末の入庫時メーター指針 ----------------
+// 運転月報の「月末 入庫時」(31日の下の欄)をiPhoneから入れる。提出期日は翌月5日で、
+// それまでに翌月の出庫が無いと最後に出庫した日の走行距離が出ないため(2026-11-27 ユーザー指定)。
+// 翌月の出庫時メーター指針が入っていればそちらを優先する(app.js の monthEndMeter)ので、ここでは入力不可にする。
+
+// 既定の年月：月の前半(1〜10日)は前月分、それ以降は当月分
+function defaultEndMonth() {
+  const now = new Date();
+  const d = now.getDate() <= 10 ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function endMeterTarget() {
+  const ym = tripEndMonth || defaultEndMonth();
+  const [year, month] = ym.split('-').map(Number);
+  const vehicleId = effectiveTripVehicleId();
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  return { ym, year, month, nextYear, nextMonth, vehicleId, vehicleRef: vehicleId ? vehicleRefFor(vehicleId, null) : null };
+}
+
+function endMeterFormHtml() {
+  const allVehicles = sortVehiclesByOffice(loadVehicles()).filter(isVehicleUsable);
+  const companyVehicles = allVehicles.filter((v) => (v.vehicleType || 'company') !== 'private');
+  const privateVehicles = allVehicles.filter((v) => v.vehicleType === 'private');
+  const t = endMeterTarget();
+  const record = t.vehicleRef ? loadMonthlyLog(t.vehicleRef, t.year, t.month) : null;
+  const nextRecord = t.vehicleRef ? loadMonthlyLog(t.vehicleRef, t.nextYear, t.nextMonth) : null;
+  const fromNext = nextMonthFirstMeter(nextRecord ? nextRecord.days : null);
+  const manual = record && typeof record.endMeter === 'number' ? record.endMeter : null;
+  const value = fromNext != null ? fromNext : manual;
+  const noVehicle = tripUsePrivateCar ? !privateVehicles.length : !companyVehicles.length;
+
+  return `
+    <form class="entry-form panel" id="endMeterForm">
+      <h2>月末の入庫時メーター指針</h2>
+      <p class="hint">月末に入庫したときのメーター指針を入れます。その月の最後に出庫した日の走行距離の計算に使います（運転月報の31日の下の欄）。翌月に出庫して出庫時メーター指針が入ると、その値に置き換わります。</p>
+
+      ${vehicleSelectFieldHtml(companyVehicles, privateVehicles)}
+
+      <div class="field">
+        <label>年月（どの月の月末か）</label>
+        <input type="month" name="ym" class="input-lg" value="${t.ym}" required>
+      </div>
+
+      <div class="field">
+        <label>入庫時メーター指針(km)</label>
+        <input type="text" name="endMeter" inputmode="decimal" class="input-lg" placeholder="例: 15480" value="${value != null ? escapeHtml(value) : ''}"${fromNext != null ? ' readonly' : ''}>
+        ${fromNext != null ? `<p class="hint">${t.nextMonth}月の出庫時メーター指針（${fromNext.toLocaleString()} km）が入っているため、その値を使っています。</p>` : ''}
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" ${noVehicle || fromNext != null ? 'disabled' : ''}>入庫時メーター指針を保存</button>
+      <p class="status ${tripStatusIsError ? 'error' : 'ok'}">${tripStatusMessage}</p>
+    </form>
+  `;
+}
+
+function setupEndMeterForm() {
+  const form = document.getElementById('endMeterForm');
+  form.addEventListener('submit', onEndMeterSubmit);
+  const vehicleSelect = form.querySelector('select[name="vehicleId"]');
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', (e) => {
+      tripQrVehicleId = null;
+      tripSelectedVehicleId = e.target.value;
+      tripStatusMessage = '';
+      renderTripEntryView();
+    });
+  }
+  form.querySelector('input[name="ym"]').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    tripEndMonth = e.target.value;
+    tripStatusMessage = '';
+    renderTripEntryView();
+  });
+  form.addEventListener('input', () => { tripFormDirty = true; });
+  // 他の端末で入った値(当月の入庫時・翌月の出庫時)を出すため、両方の月をクラウドから取り直す
+  // (同じ車両・年月の間は取り直さない。タブを開き直すと tripSyncedLogKey が戻るので取り直す)
+  const t = endMeterTarget();
+  if (!t.vehicleRef) return;
+  const syncKey = `end:${t.vehicleRef}:${t.ym}`;
+  if (tripSyncedLogKey === syncKey) return;
+  tripSyncedLogKey = syncKey;
+  Promise.all([
+    syncMonthlyLogFromCloud(t.vehicleRef, t.year, t.month, { vehicleId: t.vehicleId }),
+    syncMonthlyLogFromCloud(t.vehicleRef, t.nextYear, t.nextMonth, { vehicleId: t.vehicleId })
+  ]).then(([a, b]) => {
+    if (!a && !b) return;
+    if (tripSyncedLogKey !== syncKey) return; // 待っている間に車両・年月が選び直された
+    if (document.body.dataset.view !== 'trip-entry' || tripEntryMode !== 'end') return;
+    if (!tripFormDirty) renderTripEntryView(); // 入力途中の値は消さない
+  });
+}
+
+async function onEndMeterSubmit(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const sel = resolveVehicleSelection(fd);
+  if (sel.error) {
+    tripStatusMessage = sel.error;
+    tripStatusIsError = true;
+    renderTripEntryView();
+    return;
+  }
+  const ym = String(fd.get('ym') || '');
+  const [year, month] = ym.split('-').map(Number);
+  if (!year || !month) return;
+  const value = parseNumberOrNull(fd.get('endMeter'));
+  if (value == null) {
+    tripStatusMessage = '入庫時メーター指針を入力してください';
+    tripStatusIsError = true;
+    renderTripEntryView();
+    return;
+  }
+  const { vehicleId } = sel;
+  const vehicleRef = vehicleRefFor(vehicleId, null);
+  // metaは丸ごと書き込むため、先にクラウドの最新(点検結果・提出状態など)を取り込んでから保存する
+  await syncMonthlyLogFromCloud(vehicleRef, year, month, { vehicleId });
+  const record = getOrCreateMonthlyLog(vehicleRef, year, month, { vehicleId });
+  record.endMeter = value;
+  record.metaUpdatedAt = new Date().toISOString();
+  saveMonthlyLog(record);
+  syncLogMetaToCloud(record.key, buildMetaPayload(record));
+
+  tripEndMonth = ym;
+  tripStatusMessage = `保存しました(${year}年${month}月末・${value.toLocaleString()} km)`;
+  tripStatusIsError = false;
+  showToast('保存しました');
+  renderTripEntryView();
 }
 
 // ---------------- 点検イベント(15日・月末点検) ----------------
