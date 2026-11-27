@@ -59,32 +59,46 @@ async function showView(name) {
   }
 }
 
-// サンプルExcelのG列数式ロジックを再現する共通関数。
-// distance(day n) = meter(次にメーター指針が記録されている日) - meter(day n)
-// 休日等で翌日以降のメーター指針が未入力の場合は、月末(31日)までの間で
-// 次に記録されている日まで遡って差分を取る(間の空欄日はスキップする)。
-// 記録されている日が月末までに無い場合、または対象日自体が未入力の場合は空欄。
-// ただし月の最終日(lastDayOfMonth)だけは、同月内に次の記録が無ければ
-// 翌月分(nextMonthDays)から同じロジックで次の記録を探す(year/month/nextMonthDaysが
-// 渡された場合のみ。月末以外の日には影響しない)。
-function computeDistance(days, day, year, month, nextMonthDays) {
+// 翌月で最初に記録された出庫時メーター指針(無ければnull)。
+function nextMonthFirstMeter(nextMonthDays) {
+  if (!nextMonthDays) return null;
+  for (let d = 1; d <= 31; d++) {
+    const next = nextMonthDays[d];
+    if (next && next.meterReading != null) return next.meterReading;
+  }
+  return null;
+}
+
+// 月末の入庫時メーター指針(Y-Format 本-安全-A0014 の「月末 入庫時」と同じ欄。2026-11-27 追加)。
+// 翌月の出庫時メーター指針が1件でも入っていれば、その最初の値を使う(月末に入庫した値と
+// 翌月最初に出庫した値は同じはずなので、翌月の入力を優先して反映する)。翌月がまだなら、
+// 月報画面で手入力した値(record.endMeter。未入力は空文字)を使う。
+function monthEndMeter(nextMonthDays, manualEndMeter) {
+  const fromNext = nextMonthFirstMeter(nextMonthDays);
+  if (fromNext != null) return fromNext;
+  return typeof manualEndMeter === 'number' ? manualEndMeter : null;
+}
+
+// 走行距離 = 次に出庫した日の出庫時メーター指針 - その日の出庫時メーター指針。
+// 休日等で翌日以降のメーター指針が未入力の場合は、月末までの間で次に記録されている
+// 日まで進んで差分を取る(間の空欄日はスキップする。サンプルExcelのG列と同じ考え方)。
+// その月の最後に出庫した日(以降の日に記録が無い日。月末が土日で出庫しない場合も)は、
+// 月末の入庫時メーター指針(monthEndMeter)との差にする。それも無ければ空欄。
+// 対象日自体が未入力なら空欄。
+function computeDistance(days, day, year, month, nextMonthDays, manualEndMeter) {
   const cur = days[day];
   if (!cur || cur.meterReading == null) return '';
-  for (let d = day + 1; d <= 31; d++) {
+  const last = year != null && month != null ? lastDayOfMonth(year, month) : 31;
+  if (day > last) return '';
+  for (let d = day + 1; d <= last; d++) {
     const next = days[d];
     if (next && next.meterReading != null) {
       return next.meterReading - cur.meterReading;
     }
   }
-  if (nextMonthDays && year != null && month != null && day === lastDayOfMonth(year, month)) {
-    for (let d = 1; d <= 31; d++) {
-      const next = nextMonthDays[d];
-      if (next && next.meterReading != null) {
-        return next.meterReading - cur.meterReading;
-      }
-    }
-  }
-  return '';
+  if (year == null || month == null) return '';
+  const end = monthEndMeter(nextMonthDays, manualEndMeter);
+  return end == null ? '' : end - cur.meterReading;
 }
 
 // --- 日本の祝日判定(振替休日込み、春分・秋分は近似式) ---
@@ -159,11 +173,11 @@ function dayColorClass(year, month, day, holidays) {
   return '';
 }
 
-function computeTotals(days, year, month, nextMonthDays) {
+function computeTotals(days, year, month, nextMonthDays, manualEndMeter) {
   let totalDistance = 0;
   let totalFuel = 0;
   for (let d = 1; d <= 31; d++) {
-    const dist = computeDistance(days, d, year, month, nextMonthDays);
+    const dist = computeDistance(days, d, year, month, nextMonthDays, manualEndMeter);
     if (typeof dist === 'number') totalDistance += dist;
     const fuel = days[d] && days[d].fuelAdded;
     if (typeof fuel === 'number') totalFuel += fuel;

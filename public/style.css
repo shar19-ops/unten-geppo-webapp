@@ -282,6 +282,13 @@ input[type="date"].input-lg {
 /* .report-table th/td の text-align:center の方がクラス単体より詳細度が高く上書きされてしまうため、
    th/td込みで詳細度を揃えて左寄せを確実に効かせる */
 .report-table td.dest-cell { text-align: left; }
+/* 31日の下の「月末 入庫時」の行。翌月の値を反映して手入力できない間は灰色にする */
+.report-table td.end-meter-label { font-size: 0.75rem; white-space: nowrap; padding: 0.3rem 0.1rem; }
+.report-table td.end-meter-note { text-align: left; font-size: 0.75rem; color: #555; }
+.report-table .end-meter-row input.cell-input[readonly] { background: #eee; color: #333; }
+/* 運転記録入力の「月末入庫」：翌月の値を反映中は入力欄・保存ボタンを灰色に */
+#endMeterForm input[readonly] { background: #eee; color: #333; }
+#endMeterForm button:disabled { opacity: 0.5; cursor: default; }
 /* 行先の字下げは、セルのtext-indentではなく入力欄のpadding-leftで取る。
    text-indentだと中の入力欄ごと右へずれるが、入力欄はwidth:100%(=セルの内側いっぱい)
    のままなので、ずれた分だけ右にはみ出してしまう。padding-leftなら
@@ -472,6 +479,8 @@ input[type="date"].input-lg {
 .ps-info td { height: 7mm; }
 .ps-days thead th { height: 6mm; }
 .ps-days tbody td { height: 9mm; }
+.ps-days tfoot td { height: 9mm; } /* 月末 入庫時の行(日の行と同じ高さ。Y-Format と同じ) */
+.ps-days tfoot td.ps-end-note { font-size: 8pt; }
 .ps-c { text-align: center; }
 .ps-n { text-align: right; font-variant-numeric: tabular-nums; }
 .ps-t { text-align: left; }
